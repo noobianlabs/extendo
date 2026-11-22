@@ -51,9 +51,10 @@ export function humanizeTool(name: string): string {
 }
 
 const DelegateCard = memo(function DelegateCard({
-  call, subagents, onOpenSubagents, onSubagentApproval, connected,
+  call, turnId, subagents, onOpenSubagents, onSubagentApproval, connected,
 }: {
   call: ToolCall;
+  turnId: string;
   subagents: Subagent[];
   onOpenSubagents: () => void;
   onSubagentApproval: (sessionId: string, requestId: string, decision: ApprovalDecision) => Promise<void>;
@@ -63,8 +64,9 @@ const DelegateCard = memo(function DelegateCard({
   const input = object(call.input) ?? {};
   const tasks = Array.isArray(input.tasks) ? input.tasks.filter((task): task is Record<string, JsonValue> => Boolean(task) && typeof task === 'object' && !Array.isArray(task)) : [];
   const roles = tasks.map((task) => typeof task.role === 'string' ? task.role : undefined).filter(Boolean) as string[];
-  const waiting = subagents.filter((subagent) => subagent.approval);
-  const states = subagents.reduce<Record<string, number>>((tally, subagent) => {
+  const run = subagents.filter((subagent) => subagent.parentTurnId === turnId);
+  const waiting = run.filter((subagent) => subagent.approval);
+  const states = run.reduce<Record<string, number>>((tally, subagent) => {
     tally[subagent.state] = (tally[subagent.state] ?? 0) + 1;
     return tally;
   }, {});
@@ -79,10 +81,10 @@ const DelegateCard = memo(function DelegateCard({
     <div className={styles.tool} data-approval={waiting.length > 0 || undefined}>
       <div className={styles.delegate}>
         <button type="button" className={styles.delegateHeader} aria-expanded={expanded}
-          title={`${tasks.length || subagents.length} subagents${roles.length ? `: ${roles.join(', ')}` : ''}`}
+          title={`${tasks.length || run.length} subagents${roles.length ? `: ${roles.join(', ')}` : ''}`}
           onClick={() => setExpanded((value) => !value)}>
           <Asterisk size={15} className={styles.toolIcon} aria-hidden="true" />
-          <span className={styles.toolLabel}>Delegated {tasks.length || subagents.length} subagents</span>
+          <span className={styles.toolLabel}>Delegated {tasks.length || run.length} subagents</span>
           {roles.length > 0 && <code className={styles.toolArgument} dir="ltr">{roles.join(', ')}</code>}
           {summary && <span className={styles.delegateState}>{summary}</span>}
           <ChevronRight className={styles.disclosure} size={14} aria-hidden="true" data-open={expanded} />
@@ -189,7 +191,7 @@ export const AssistantStep = memo(function AssistantStep({
         <div className={styles.tools}>
           {message.tools.map(({ call, result }) => (
             humanizeTool(call.name) === 'Delegate'
-              ? <DelegateCard key={call.id} call={call} subagents={subagents} onOpenSubagents={onOpenSubagents}
+              ? <DelegateCard key={call.id} call={call} turnId={message.turnId} subagents={subagents} onOpenSubagents={onOpenSubagents}
                 onSubagentApproval={onSubagentApproval} connected={connected} />
               : <ToolCard
                 key={call.id}

@@ -12,7 +12,10 @@ export function projectSubagents(events: readonly SessionEvent[]): Subagent[] {
       case 'subagent/spawned': {
         const { subagentId, title, role, sessionId } = event.data;
         if (subagents.has(subagentId)) break;
-        subagents.set(subagentId, { id: subagentId, title, role, sessionId, state: 'queued', activity: [], position: event.data.position });
+        subagents.set(subagentId, {
+          id: subagentId, title, role, sessionId, state: 'queued', activity: [],
+          position: event.data.position, parentTurnId: event.data.parentTurnId,
+        });
         break;
       }
       case 'subagent/queued': {

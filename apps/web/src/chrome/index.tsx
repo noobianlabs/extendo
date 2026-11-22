@@ -618,6 +618,7 @@ export function Shell({
       </aside>
       <div className="extendo-chrome-workspace">
         <header className="extendo-chrome-header" inert={navModal || railModal ? true : undefined}>
+          <div className="extendo-chrome-header-inner">
           <button
             className="extendo-chrome-icon-button extendo-chrome-mobile-nav"
             type="button"
@@ -681,6 +682,7 @@ export function Shell({
             >
               <Icon icon={PanelRight} size={17} />
             </button>
+          </div>
           </div>
         </header>
         <div className="extendo-chrome-stage">

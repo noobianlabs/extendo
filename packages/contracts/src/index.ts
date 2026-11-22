@@ -164,6 +164,7 @@ export interface Subagent {
   role?: string;
   sessionId: string;
   state: SubagentState;
+  parentTurnId?: string;
   approval?: SubagentApproval;
   position?: number;
   startedAt?: string;
