@@ -11,7 +11,7 @@ A `Plugin` has a name and an `apply(ctx)` function. Register services, listeners
 | Kind | Names |
 | --- | --- |
 | Durable | `session/created`, `turn/start`, `turn/end`, `step/start`, `step/end`, `user/message`, `assistant/message`, `assistant/attempt`, `tool/call`, `tool/result`, `context/compacted` |
-| Live | `session/event`, `agent/status`, `agent/error`, `assistant/delta`, `tool/approval`, `tool/approval-answered` |
+| Live | `session/event`, `agent/status`, `agent/error`, `assistant/delta`, `assistant/tool-call`, `tool/approval`, `tool/approval-answered` |
 | Waterfall | `agent/pre-step`, `agent/request`, `llm/stream`, `tools/pre-execute`, `tools/execute`, `tools/post-execute` |
 | Capability seams | `fs/read`, `fs/write`, `tools/register`, `llm/register`, `telemetry/event` |
 

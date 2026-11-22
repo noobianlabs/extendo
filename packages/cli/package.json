@@ -1,0 +1,21 @@
+{
+  "name": "@extendo/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "extendo": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsdown --dts"
+  },
+  "tsdown": {
+    "fixedExtension": false
+  },
+  "dependencies": {
+    "@extendo/contracts": "workspace:*",
+    "@extendo/kernel": "workspace:*",
+    "@extendo/server": "workspace:*",
+    "zod": "4.6.7"
+  }
+}

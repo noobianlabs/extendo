@@ -1,0 +1,23 @@
+{
+  "name": "@extendo/hello-plugin",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "extendo": {
+    "server": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsdown --dts"
+  },
+  "tsdown": {
+    "fixedExtension": false
+  },
+  "dependencies": {
+    "@extendo/plugin-sdk": "workspace:*",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@extendo/agent": "workspace:*",
+    "@extendo/kernel": "workspace:*"
+  }
+}

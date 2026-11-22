@@ -256,6 +256,22 @@ importers:
         specifier: 8.3.8
         version: 8.3.8(@types/node@24.19.2)
 
+  examples/hello-plugin:
+    dependencies:
+      '@extendo/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../packages/plugin-sdk
+      zod:
+        specifier: 4.6.7
+        version: 4.6.7
+    devDependencies:
+      '@extendo/agent':
+        specifier: workspace:*
+        version: link:../../packages/agent
+      '@extendo/kernel':
+        specifier: workspace:*
+        version: link:../../packages/kernel
+
   packages/agent:
     dependencies:
       '@extendo/contracts':
@@ -297,6 +313,15 @@ importers:
       '@extendo/contracts':
         specifier: workspace:*
         version: link:../contracts
+
+  packages/plugin-sdk:
+    dependencies:
+      '@extendo/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      zod:
+        specifier: 4.6.7
+        version: 4.6.7
 
   packages/providers:
     dependencies:
