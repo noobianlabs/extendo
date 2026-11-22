@@ -8,7 +8,7 @@ import {
   useEffect, useId, useLayoutEffect, useMemo, useRef, useState,
   type KeyboardEvent, type ReactNode, type RefObject,
 } from 'react';
-import { subagentCounts, type Project, type Thread } from '@extendo/contracts';
+import type { Project, Thread } from '@extendo/contracts';
 import { boardLabels, elapsed, groupBoard, threadState, threadSummary } from '../console/board';
 import { ModelPicker } from '../console/modelPicker';
 import board from '../console/console.module.css';
@@ -151,7 +151,7 @@ function Mark() {
  * A path shortened to its last few segments, so a tight header still shows the project name
  * instead of a fragment like "/.no…". The full path stays in the title and for screen readers.
  */
-function elidePath(path: string, budget = 26): string {
+function elidePath(path: string, budget = 20): string {
   const separator = path.includes('\\') ? '\\' : '/';
   const segments = path.split(/[\\/]+/).filter(Boolean);
   if (segments.length < 2) return path;
@@ -169,17 +169,11 @@ function elidePath(path: string, budget = 26): string {
 }
 
 function PathText({ path }: { path: string }) {
-  const shown = elidePath(path);
-  const end = Math.max(shown.lastIndexOf('/'), shown.lastIndexOf('\\'));
-  if (end < 0 || end === shown.length - 1) {
-    return <bdi className="extendo-chrome-ellipsis extendo-chrome-mono" title={path}>{shown}</bdi>;
-  }
   return (
-    <span className="extendo-chrome-path extendo-chrome-mono" title={path} dir="ltr">
+    <bdi className="extendo-chrome-ellipsis extendo-chrome-mono" title={path} dir="ltr">
       <span className="extendo-chrome-sr-only">{path}</span>
-      <span className="extendo-chrome-path-start" aria-hidden="true">{shown.slice(0, end + 1)}</span>
-      <bdi className="extendo-chrome-path-end" aria-hidden="true">{shown.slice(end + 1)}</bdi>
-    </span>
+      <span aria-hidden="true">{elidePath(path)}</span>
+    </bdi>
   );
 }
 
@@ -657,19 +651,11 @@ export function Shell({
             <h1 className="extendo-chrome-ellipsis" title={title} dir="auto">{title}</h1>
             {thread && (() => {
               const state = threadState(thread);
-              const counts = subagentCounts(thread.subagents ?? []);
               const since = elapsed(thread.stateSince ?? thread.updatedAt, now);
-              const swarm = [
-                counts.waiting ? `${counts.waiting} subagent${counts.waiting === 1 ? '' : 's'} blocked` : undefined,
-                counts.running ? `${counts.running} running` : undefined,
-                counts.queued ? `${counts.queued} queued` : undefined,
-                !counts.waiting && !counts.running && !counts.queued && counts.done ? `${counts.done} done` : undefined,
-              ].filter(Boolean).slice(0, 2);
               return <span className="extendo-chrome-runstate" data-state={state}>
                 <span className={board.boardDot} data-state={state} aria-hidden="true" />
                 <span>{boardLabels[state]}</span>
                 {since && <span className="extendo-chrome-elapsed">{since}</span>}
-                {swarm.length > 0 && <span className="extendo-chrome-swarm">{swarm.join(' · ')}</span>}
               </span>;
             })()}
             {branch && <span className="extendo-chrome-branch extendo-chrome-head-item" title={branch}>

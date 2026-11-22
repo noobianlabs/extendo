@@ -34,9 +34,7 @@
   stroke-width: 1.65;
 }
 
-.extendo-chrome-ellipsis,
-.extendo-chrome-path-start,
-.extendo-chrome-path-end {
+.extendo-chrome-ellipsis {
   display: block;
   min-width: 0;
   overflow: hidden;
@@ -58,21 +56,6 @@
   font-family: var(--font-mono, ui-monospace, monospace);
   font-size: 0.6875rem;
   font-weight: 400;
-}
-
-.extendo-chrome-path {
-  display: inline-flex;
-  min-width: 0;
-  max-width: 100%;
-}
-
-.extendo-chrome-path-start {
-  flex: 0 1 auto;
-}
-
-.extendo-chrome-path-end {
-  flex: 0 0 auto;
-  max-width: 70%;
 }
 
 .extendo-chrome-sidebar button,
@@ -612,8 +595,8 @@
 }
 
 .extendo-chrome-context h1 {
-  flex: 0 1 auto;
-  min-width: 0;
+  flex: 1 1 auto;
+  min-width: 9rem;
   margin: 0;
   overflow: hidden;
   font: 600 0.8125rem / 1.4 var(--font-sans, Inter, sans-serif);
@@ -643,10 +626,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-.extendo-chrome-swarm {
-  color: var(--muted-2, #7f7f82);
-}
-
 .extendo-chrome-mobile-context {
   display: none;
 }
@@ -669,14 +648,10 @@
 .extendo-chrome-header-path {
   flex: 0 1 auto;
   overflow: hidden;
-  min-width: 5.5rem;
+  min-width: 9rem;
   max-width: 34%;
   padding-inline-start: 10px;
   border-inline-start: var(--extendo-hairline) solid var(--border-2, #2e2e2f);
-}
-
-.extendo-chrome-header-path .extendo-chrome-path-end {
-  max-width: none;
 }
 
 .extendo-chrome-model {
@@ -848,6 +823,10 @@
     gap: 8px;
   }
 
+  .extendo-chrome-context h1 {
+    min-width: 0;
+  }
+
   .extendo-chrome-branch {
     max-width: 30%;
   }
@@ -885,6 +864,7 @@
 
   .extendo-chrome-header-inner {
     gap: 4px;
+    padding-block: 7px;
     padding-inline: 2px;
   }
 
