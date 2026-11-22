@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "paths": {
+      "@extendo/*": ["./packages/*/src/index.ts", "./apps/*/src/index.ts"]
+    }
+  },
+  "include": ["packages/*/src/**/*.ts", "apps/server/src/**/*.ts", "examples/*/src/**/*.ts", "vitest.config.ts"]
+}
