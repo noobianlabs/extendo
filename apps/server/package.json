@@ -1,0 +1,33 @@
+{
+  "name": "@extendo/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsdown --dts"
+  },
+  "tsdown": {
+    "fixedExtension": false
+  },
+  "dependencies": {
+    "@extendo/agent": "workspace:*",
+    "@extendo/contracts": "workspace:*",
+    "@extendo/kernel": "workspace:*",
+    "@extendo/providers": "workspace:*",
+    "@extendo/session": "workspace:*",
+    "@extendo/tools": "workspace:*",
+    "@hono/node-server": "2.1.11",
+    "hono": "4.13.19",
+    "ws": "8.23.0",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/ws": "8.18.2"
+  }
+}
