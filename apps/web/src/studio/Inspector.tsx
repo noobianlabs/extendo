@@ -1,12 +1,13 @@
-import { useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent, ReactNode } from 'react';
 import {
   ChevronRight, Circle, CircleCheck, CircleDot, CircleX, FileCode2, FilePenLine,
   FileSearch, FlaskConical, PanelRight, SquareTerminal, Wrench, X,
 } from 'lucide-react';
 import type { AgentStatus, JsonValue, Message, Thread } from '@extendo/contracts';
-import DiffView from '../chat/diff';
 import styles from './inspector.module.css';
+
+const DiffView = lazy(() => import('../chat/diff'));
 
 const tabs = ['Overview', 'Changes', 'Terminal'] as const;
 type Tab = typeof tabs[number];
@@ -196,7 +197,9 @@ function Diff({ change }: { change: Change }) {
   return <div className={styles.diff}>
     {summary && <p>{summary}</p>}
     {before !== undefined && after !== undefined
-      ? <DiffView diff={{ path, before, after, additions: additions ?? 0, deletions: deletions ?? 0 }} />
+      ? <Suspense fallback={<p role="status">Loading diff…</p>}>
+        <DiffView diff={{ path, before, after, additions: additions ?? 0, deletions: deletions ?? 0 }} />
+      </Suspense>
       : !summary && <p>No line diff was returned.</p>}
   </div>;
 }
