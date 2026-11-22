@@ -167,6 +167,7 @@ export interface Events extends Omit<SessionEventData, 'session/created'> {
   'agent/status': { sessionId: string; status: AgentStatus };
   'agent/error': { sessionId: string; turnId: string; message: string };
   'assistant/delta': StepRef & { sessionId: string; messageId: string; kind: 'text' | 'reasoning'; delta: string };
+  'assistant/tool-call': StepRef & { sessionId: string; messageId: string; call: ToolCall };
   'tool/approval': ApprovalRequest;
   'tool/approval-answered': { sessionId: string; requestId: string; decision: ApprovalDecision };
   'fs/read': { sessionId: string; path: string };
@@ -258,7 +259,7 @@ export type RpcResponse<M extends keyof RpcResults = keyof RpcResults> =
   | { id: RpcId; result: RpcResults[M] }
   | { id: RpcId | null; error: { code: string; message: string } };
 
-export type RpcEventName = 'session/event' | 'agent/status' | 'agent/error' | 'assistant/delta' | 'tool/approval' | 'tool/approval-answered';
+export type RpcEventName = 'session/event' | 'agent/status' | 'agent/error' | 'assistant/delta' | 'assistant/tool-call' | 'tool/approval' | 'tool/approval-answered';
 export type RpcEvent = { [K in RpcEventName]: { event: K; data: Events[K] } }[RpcEventName];
 export type RpcServerFrame = RpcResponse | RpcEvent;
 
