@@ -4,8 +4,7 @@ import type { AgentStatus, ApprovalDecision, Project, ProviderInfo, Settings, Th
 import { api, json } from './api';
 import { ChatSurface } from './chat';
 import { Shell } from './chrome';
-import { BlockingBanner } from './console/blocking';
-import { ThreadHeader } from './console/threadHeader';
+import { RunBar } from './console/threadHeader';
 import { useNow } from './console/useNow';
 import { CommandPalette, Inspector, OpenProjectDialog, SettingsDialog, type InspectorTab } from './studio';
 import { stressData, stressMode } from './stress';
@@ -209,7 +208,9 @@ export function App() {
   };
 
   return <>
-    <Shell projects={projects} threads={threads} projectId={project?.id} thread={thread} providerLabel={providerLabel}
+    <Shell projects={projects} threads={threads} providers={data.providers} selection={selection}
+      onSelectModel={(next, model) => setForcedProvider({ provider: next, model })}
+      projectId={project?.id} thread={thread} providerLabel={providerLabel}
       loading={isLoading} now={now} rightOpen={inspector} onToggleRight={toggleInspector} usageLabel={thread ? usageLabel : undefined}
       onSelectProject={(id) => { setActiveProject(id); setActiveThread(undefined); setForcedProvider(undefined); setNotice(undefined); }}
       onSelectThread={selectThread} onNewThread={() => { void createThread(); }} onOpenProject={() => setOpenProject(true)}
@@ -219,14 +220,15 @@ export function App() {
         onSteer={steerSubagent} onStop={stopSubagent} onApproval={answerFor} />}>
       <div className="extendo-main">
         {notice && <div className="extendo-notice" role="alert"><CircleAlert size={14} aria-hidden="true" />{notice}<button type="button" onClick={() => setNotice(undefined)}>Dismiss</button></div>}
-        {thread && <ThreadHeader thread={thread} now={now} previewOpen={inspector && panelTab === 'Preview'}
+        {thread && <RunBar thread={thread} previewOpen={inspector && panelTab === 'Preview'}
           merging={merging} onMerge={() => { void mergePullRequest(); }} onTogglePreview={togglePreview} />}
-        {thread && <BlockingBanner thread={thread} count={waitingSubagents}
-          onReview={() => { setPanelTab('Subagents'); setInspector(true); }} />}
         {thread || isLoading ? (
           <ChatSurface key={thread?.id ?? 'loading'} title={thread?.title} messages={messages} draft={view.draft} approvals={view.approvals} status={status}
             loading={isLoading || (!fixture && view.loading)} error={view.error} providerLabel={providerLabel} connected={connected}
             needsProvider={Boolean(thread && !provider?.configured)} onSend={send} onCancel={cancelTurn} onApproval={answer}
+            subagents={thread?.subagents ?? []} waitingSubagents={waitingSubagents}
+            onOpenSubagents={() => { setPanelTab('Subagents'); setInspector(true); }}
+            onSubagentApproval={answerFor}
             onOpenSettings={() => setPreferences(true)} onOpenPalette={() => setPalette(true)}
             onSelectDemo={() => setForcedProvider({ provider: 'demo', model: sampleProvider.model })} suggestions={suggestions} />
         ) : (

@@ -4,7 +4,7 @@ import { gitPullRequestReader, pullRequestPlugin, scriptedPullRequestReader } fr
 import type { CommandResult, Exec } from './index.js';
 
 const CWD = '/repo';
-const FIELDS = 'number,title,url,state,isDraft,headRefName,baseRefName,additions,deletions,changedFiles,reviewDecision,statusCheckRollup';
+const FIELDS = 'number,title,url,state,isDraft,mergeable,headRefName,baseRefName,additions,deletions,changedFiles,reviewDecision,statusCheckRollup';
 
 interface Call {
   command: string;
@@ -43,6 +43,7 @@ function view(overrides: Record<string, unknown> = {}): string {
     url: 'https://github.com/extendo/extendo/pull/42',
     state: 'OPEN',
     isDraft: false,
+    mergeable: 'MERGEABLE',
     headRefName: 'feature/reader',
     baseRefName: 'main',
     additions: 120,

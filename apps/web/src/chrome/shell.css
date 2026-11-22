@@ -2,7 +2,7 @@
   --extendo-sidebar-width: 240px;
   --extendo-rail-width: 320px;
   --extendo-header-height: max(44px, 2.75rem);
-  --extendo-hairline: 0.5px;
+  --extendo-hairline: var(--hairline, 0.5px);
   position: relative;
   isolation: isolate;
   display: grid;
@@ -530,6 +530,9 @@
 }
 
 .extendo-chrome-sidebar-footer {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   flex: none;
   padding: 6px 9px 7px;
   border-block-start: var(--extendo-hairline) solid var(--border-2, #2e2e2f);
@@ -546,16 +549,6 @@
 .extendo-chrome-settings-leading {
   display: flex;
   flex: none;
-}
-
-.extendo-chrome-provider {
-  flex: 0 1 auto;
-  max-width: 53%;
-  padding: 2px 5px;
-  border: var(--extendo-hairline) solid var(--border-2, #2e2e2f);
-  border-radius: 4px;
-  background: var(--section, #1a1a1b);
-  font-size: 0.6875rem;
 }
 
 .extendo-chrome-workspace {
@@ -596,9 +589,38 @@
 
 .extendo-chrome-context h1 {
   flex: 0 1 auto;
+  min-width: 0;
   margin: 0;
+  overflow: hidden;
   font: 600 0.8125rem / 1.4 var(--font-sans, Inter, sans-serif);
   letter-spacing: -0.012em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.extendo-chrome-runstate {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted-1, #a3a3a6);
+  font-size: 0.6875rem;
+  white-space: nowrap;
+}
+
+.extendo-chrome-runstate[data-state="waiting-approval"] {
+  color: var(--text, #ebebec);
+}
+
+.extendo-chrome-elapsed {
+  color: var(--muted-2, #7f7f82);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.6563rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.extendo-chrome-swarm {
+  color: var(--muted-2, #7f7f82);
 }
 
 .extendo-chrome-mobile-context {
@@ -620,41 +642,26 @@
 }
 
 .extendo-chrome-header-path {
-  flex: 0 1 auto;
+  flex: 0 4 auto;
+  overflow: hidden;
   max-width: 34%;
   padding-inline-start: 10px;
   border-inline-start: var(--extendo-hairline) solid var(--border-2, #2e2e2f);
 }
 
 .extendo-chrome-model {
-  max-width: 140px;
+  flex: none;
+  max-width: none;
 }
 
 .extendo-chrome-usage {
   display: block;
-  max-width: 12ch;
+  flex: none;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
 
-.extendo-chrome-header-status {
-  display: flex;
-  flex: none;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 6px;
-  border: var(--extendo-hairline) solid var(--border-1, #262627);
-  border-radius: 4px;
-  background: var(--section, #1a1a1b);
-  color: var(--muted-1, #a3a3a6);
-  font-size: 0.6875rem;
-  white-space: nowrap;
-}
 
-.extendo-chrome-header button.extendo-chrome-rail-toggle[aria-expanded="true"] {
-  background: var(--secondary, #232324);
-  color: var(--text, #ebebec);
-}
 
 .extendo-chrome-header button.extendo-chrome-mobile-nav {
   display: none;
@@ -728,7 +735,7 @@
 .extendo-chrome[data-collapsed="true"] .extendo-chrome-project-chevron,
 .extendo-chrome[data-collapsed="true"] .extendo-chrome-action-label,
 .extendo-chrome[data-collapsed="true"] .extendo-chrome-shortcut,
-.extendo-chrome[data-collapsed="true"] .extendo-chrome-provider,
+.extendo-chrome[data-collapsed="true"] .extendo-chrome-picker,
 .extendo-chrome[data-collapsed="true"] .extendo-chrome-threads {
   display: none;
 }

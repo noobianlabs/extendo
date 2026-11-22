@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import type { AgentStatus, ApprovalDecision, JsonValue, Message, Thread } from '@extendo/contracts';
 import { boardLabels } from '../console/board';
+import { humanizeTool } from '../chat/messages';
 import { PreviewPane } from '../console/preview';
 import { SubagentsPanel } from '../console/subagents';
 import styles from './inspector.module.css';
@@ -288,8 +289,15 @@ export function Inspector({
     }
     const changes = changesFor(activity);
     const plan = planFor(recentMessages, recent);
+    const state = thread?.state;
+    if (plan.length && (state === 'working' || state === 'failed')) {
+      const last = plan.at(-1);
+      if (last && last.state !== 'failed' && last.state !== 'running') {
+        plan[plan.length - 1] = { ...last, state: state === 'failed' ? 'failed' : 'running' };
+      }
+    }
     return { activity, changes, plan };
-  }, [messages, status]);
+  }, [messages, status, thread?.state]);
   const selectChange = (path: string) => {
     focusChange.current = true;
     setOpened({ threadId: thread?.id, path });
@@ -340,7 +348,10 @@ export function Inspector({
                   <FileRow {...change} />
                 </button>
               </li>)}
-            </ul> : <p className={styles.empty}>No file changes yet.</p>}
+            </ul> : thread.pullRequest ? <p className={styles.empty}>
+              The pull request on {thread.pullRequest.branch} carries {formatNumber.format(thread.pullRequest.changedFiles)} files,
+              {' '}+{formatNumber.format(thread.pullRequest.additions)} −{formatNumber.format(thread.pullRequest.deletions)}. Tool-level diffs appear here as this session edits files.
+            </p> : <p className={styles.empty}>No file changes yet.</p>}
           </Section>
           <Section title="Activity">
             {data.activity.length ? <ul className={styles.activity}>

@@ -13,19 +13,19 @@ export const demoPullRequests = (): Record<string, PullRequest> => ({
     number: 214, title: 'Name the query in the empty state', url: 'https://github.com/northstar/web/pull/214',
     branch: 'feat/empty-state-copy', base: 'main', additions: 7, deletions: 2, changedFiles: 2,
     checks: 'passing', checksSummary: '5 checks passed', review: 'approved',
-    draft: false, merged: false, state: 'open',
+    draft: false, merged: false, mergeable: true, state: 'open',
   },
   'feat/swarm-audit': {
     number: 219, title: 'Audit empty-state copy across search surfaces', url: 'https://github.com/northstar/web/pull/219',
     branch: 'feat/swarm-audit', base: 'main', additions: 31, deletions: 12, changedFiles: 4,
     checks: 'failing', checksSummary: '2 failing', review: 'changes-requested',
-    draft: false, merged: false, state: 'open',
+    draft: false, merged: false, mergeable: false, state: 'open',
   },
   'chore/release-notes': {
     number: 221, title: 'Draft the regional search release notes', url: 'https://github.com/northstar/web/pull/221',
     branch: 'chore/release-notes', base: 'main', additions: 18, deletions: 0, changedFiles: 1,
     checks: 'pending', checksSummary: '3 pending', review: 'pending',
-    draft: true, merged: false, state: 'open',
+    draft: true, merged: false, mergeable: true, state: 'open',
   },
 });
 

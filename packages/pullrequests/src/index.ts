@@ -6,7 +6,7 @@ const execFileAsync = promisify(execFile);
 
 const MAX_OUTPUT_BYTES = 1024 * 1024;
 const COMMAND_TIMEOUT_MS = 10_000;
-const GH_FIELDS = 'number,title,url,state,isDraft,headRefName,baseRefName,additions,deletions,changedFiles,reviewDecision,statusCheckRollup';
+const GH_FIELDS = 'number,title,url,state,isDraft,mergeable,headRefName,baseRefName,additions,deletions,changedFiles,reviewDecision,statusCheckRollup';
 
 const FAILURE_CHECKS = new Set(['FAILURE', 'CANCELLED', 'TIMED_OUT', 'ACTION_REQUIRED']);
 const PENDING_CHECKS = new Set(['PENDING', 'QUEUED', 'IN_PROGRESS', 'WAITING', 'REQUESTED', 'EXPECTED', '']);
@@ -154,6 +154,7 @@ function toPullRequest(view: Record<string, unknown>, branch: string): PullReque
     review: reviewState(view.reviewDecision),
     draft: view.isDraft === true,
     merged: state === 'merged',
+    mergeable: view.mergeable === 'MERGEABLE' ? true : view.mergeable === 'CONFLICTING' ? false : undefined,
     state,
   };
 }

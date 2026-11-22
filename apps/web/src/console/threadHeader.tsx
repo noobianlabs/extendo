@@ -1,94 +1,71 @@
-import { CircleCheck, CircleX, Clock3, GitPullRequest, Merge, MonitorPlay } from 'lucide-react';
+import { CircleCheck, CircleX, Clock3, GitMerge, GitPullRequest, MonitorPlay } from 'lucide-react';
 import type { PullRequest, Thread } from '@extendo/contracts';
-import { boardLabels, elapsed, threadState } from './board';
-import { subagentCounts } from '@extendo/contracts';
 import styles from './console.module.css';
 
 const number = new Intl.NumberFormat();
 
-function checksLabel(pr: PullRequest) {
-  return pr.checks === 'passing' ? 'Checks passing'
-    : pr.checks === 'failing' ? 'Checks failing'
-    : pr.checks === 'pending' ? 'Checks running'
-    : 'No checks';
+type PullState = 'merged' | 'closed' | 'draft' | 'failing' | 'changes' | 'review' | 'ready' | 'open';
+
+function pullState(pr: PullRequest): { state: PullState; label: string } {
+  if (pr.state === 'merged' || pr.merged) return { state: 'merged', label: 'Merged' };
+  if (pr.state === 'closed') return { state: 'closed', label: 'Closed' };
+  if (pr.draft) return { state: 'draft', label: 'Draft' };
+  if (pr.checks === 'failing') return { state: 'failing', label: 'Checks failing' };
+  if (pr.review === 'changes-requested') return { state: 'changes', label: 'Changes requested' };
+  if (pr.checks === 'pending' || pr.review === 'pending') return { state: 'review', label: 'Waiting on review' };
+  if (pr.checks === 'passing' && pr.review === 'approved') return { state: 'ready', label: 'Ready to merge' };
+  return { state: 'open', label: 'Open' };
 }
 
-function reviewLabel(pr: PullRequest) {
-  return pr.review === 'approved' ? 'Approved'
-    : pr.review === 'changes-requested' ? 'Changes requested'
-    : pr.review === 'pending' ? 'Review pending'
-    : 'No review yet';
+function StateIcon({ state }: { state: PullState }) {
+  if (state === 'merged') return <GitMerge size={12} aria-hidden="true" />;
+  if (state === 'ready') return <CircleCheck size={12} aria-hidden="true" />;
+  if (state === 'failing' || state === 'changes' || state === 'closed') return <CircleX size={12} aria-hidden="true" />;
+  return <Clock3 size={12} aria-hidden="true" />;
 }
 
-function CheckIcon({ state }: { state: PullRequest['checks'] }) {
-  return state === 'passing' ? <CircleCheck size={12} aria-hidden="true" />
-    : state === 'failing' ? <CircleX size={12} aria-hidden="true" />
-    : <Clock3 size={12} aria-hidden="true" />;
-}
-
-function PullCard({ pr, merging, onMerge }: { pr: PullRequest; merging: boolean; onMerge: () => void }) {
-  const open = pr.state === 'open';
-  return <div className={styles.pull}>
-    <GitPullRequest size={13} aria-hidden="true" />
-    <span className={styles.pullNumber}>#{pr.number}</span>
-    <a className={styles.pullTitle} href={pr.url} target="_blank" rel="noreferrer" title={pr.title} dir="auto">{pr.title}</a>
-    <span className={styles.pullMeta}>
-      <span className={`${styles.checkState}`} data-state={pr.checks} title={checksLabel(pr)} aria-label={checksLabel(pr)}>
-        <CheckIcon state={pr.checks} />
-      </span>
-      <span title={reviewLabel(pr)}>{reviewLabel(pr)}</span>
-      <span className={styles.stats} aria-label={`${number.format(pr.additions)} added, ${number.format(pr.deletions)} removed`}>
-        <span className={styles.added}>+{number.format(pr.additions)}</span>
-        <span className={styles.removed}>−{number.format(pr.deletions)}</span>
-      </span>
-      {open && !pr.draft && <button type="button" className={styles.quietButton} disabled={merging} onClick={onMerge}>
-        <Merge size={12} aria-hidden="true" />{merging ? 'Merging…' : 'Merge'}
-      </button>}
-      {pr.state === 'merged' && <span>Merged</span>}
-      {pr.state === 'closed' && <span>Closed</span>}
+/** The pull request on this branch, as one inline chip rather than a card. */
+export function PullChip({ pr, merging, onMerge }: { pr: PullRequest; merging: boolean; onMerge: () => void }) {
+  const { state, label } = pullState(pr);
+  const canMerge = state === 'ready' || (state === 'open' && pr.mergeable !== false);
+  return <span className={styles.pullChip} data-state={state}>
+    <GitPullRequest size={12} aria-hidden="true" />
+    <a className={styles.pullNumber} href={pr.url} target="_blank" rel="noreferrer" title={pr.title} dir="auto">
+      #{pr.number}
+    </a>
+    <span className={styles.pullState} title={label}>
+      <StateIcon state={state} />{label}
     </span>
-  </div>;
+    <span className={styles.stats} aria-label={`${number.format(pr.additions)} added, ${number.format(pr.deletions)} removed`}>
+      <span className={styles.added}>+{number.format(pr.additions)}</span>
+      <span className={styles.removed}>−{number.format(pr.deletions)}</span>
+    </span>
+    {canMerge && <button type="button" className={styles.mergeButton} disabled={merging} onClick={onMerge}>
+      {merging ? 'Merging…' : 'Merge'}
+    </button>}
+  </span>;
 }
 
-export function ThreadHeader({
-  thread, now, previewOpen, merging, onMerge, onTogglePreview,
+export function RunBar({
+  thread, previewOpen, merging, onMerge, onTogglePreview,
 }: {
   thread: Thread;
-  now: number;
   previewOpen: boolean;
   merging: boolean;
   onMerge: () => void;
   onTogglePreview: () => void;
 }) {
-  const state = threadState(thread);
-  const swarm = thread.subagents ?? [];
-  const counts = subagentCounts(swarm);
-  const running = counts.running + counts.waiting;
-  const since = elapsed(thread.stateSince ?? thread.updatedAt, now);
-  const parts = [
-    running ? `${running} running` : undefined,
-    counts.queued ? `${counts.queued} queued` : undefined,
-    counts.done ? `${counts.done} done` : undefined,
-    counts.failed ? `${counts.failed} failed` : undefined,
-  ].filter(Boolean);
-  return <header className={styles.header}>
-    <div className={styles.headerTop}>
-      <span className={styles.stateChip} data-state={state}>
-        <span className={styles.stateDot} aria-hidden="true" />{boardLabels[state]}
-      </span>
-      {since && state !== 'idle' && <span className={styles.duration} title="Time in this state">{since}</span>}
-      {swarm.length > 0 && <>
-        <span className={styles.metaDot}>·</span>
-        <span className={styles.headerMeta} title={`${number.format(swarm.length)} subagents`}>
-          {swarm.length} subagent{swarm.length === 1 ? '' : 's'}{parts.length ? ` · ${parts.join(' · ')}` : ''}
-        </span>
-      </>}
+  const pr = thread.pullRequest;
+  if (!pr && !thread.preview) return null;
+  return <div className={styles.runBar}>
+    <div className={styles.runBarInner}>
+      {pr ? <PullChip pr={pr} merging={merging} onMerge={onMerge} />
+        : <span className={styles.runNote}>No pull request on {thread.branch ?? 'this branch'} yet</span>}
       <span className={styles.spacer} />
-      {thread.preview && <button type="button" className={styles.quietButton} data-active={previewOpen} onClick={onTogglePreview}
-        aria-pressed={previewOpen}>
+      {thread.preview && <button type="button" className={styles.quietButton} data-active={previewOpen}
+        aria-pressed={previewOpen} onClick={onTogglePreview}>
         <MonitorPlay size={12} aria-hidden="true" />Preview
       </button>}
     </div>
-    {thread.pullRequest && <PullCard pr={thread.pullRequest} merging={merging} onMerge={onMerge} />}
-  </header>;
+  </div>;
 }

@@ -61,9 +61,7 @@ export function relativeTime(value: string | undefined, now: number): string | u
 /** The one line under a board title: what the swarm is doing, or what the pull request needs. */
 export function threadSummary(thread: Thread): string | undefined {
   const swarm = thread.subagents ?? [];
-  const waiting = thread.state === 'waiting-approval'
-    ? swarm.some(({ state }) => state === 'waiting-approval') ? 'approval needed' : 'approval pending'
-    : undefined;
+  const waiting = thread.state === 'waiting-approval' ? 'approval needed' : undefined;
   if (waiting) return waiting;
   if (swarm.length) {
     const counts = subagentCounts(swarm);

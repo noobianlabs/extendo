@@ -109,7 +109,7 @@
 }
 
 .tabs button[aria-selected="true"] {
-  border-block-end-color: var(--primary);
+  border-block-end-color: var(--text);
   color: var(--text);
 }
 

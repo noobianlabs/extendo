@@ -69,7 +69,11 @@ export function renderPreview(thread: ThreadRow, events: readonly SessionEvent[]
   }
   :root[data-theme="light"] { color-scheme: light; }
   :root[data-theme="dark"] { color-scheme: dark; }
-  * { box-sizing: border-box; }
+  * { box-sizing: border-box; scrollbar-width: thin; scrollbar-color: var(--field) transparent; }
+  *::-webkit-scrollbar { width: 8px; height: 8px; }
+  *::-webkit-scrollbar-thumb { border: 2px solid transparent; border-radius: 999px; background: var(--field); background-clip: content-box; }
+  *::-webkit-scrollbar-track { background: transparent; }
+  *::-webkit-scrollbar-button { display: none; }
   body { margin: 0; font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--ink); background: var(--page); }
   header { display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-block-end: 1px solid var(--line); background: var(--surface); }
   header .brand { font-weight: 620; letter-spacing: -0.01em; }

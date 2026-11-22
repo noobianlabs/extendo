@@ -82,7 +82,7 @@ const emptyStateScript: Script = {
 const swarmScript: Script = {
   steps: [
     {
-      text: 'Splitting this into three independent tracks: an audit of the empty-state components, the copy patch, and a verification pass. Running them one at a time so each report lands before the next starts.',
+      text: 'Splitting this into three tracks: an audit of the empty-state components, the copy patch, and a verification pass. They run one at a time, so each report lands before the next starts.',
       call: {
         name: 'delegate',
         input: {
@@ -95,7 +95,7 @@ const swarmScript: Script = {
         },
       },
     },
-    { text: 'Three tracks are running. The audit goes first, then the patch needs your approval before it edits, and verification closes it out.' },
+    { text: 'Three tracks are queued. The audit runs now; the patch waits for your approval before it edits, and verification follows once the patch reports.' },
   ],
 };
 

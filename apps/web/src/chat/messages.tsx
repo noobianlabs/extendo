@@ -2,7 +2,7 @@ import { Asterisk, Check, ChevronRight, CircleAlert, FilePenLine, FileText, Glob
 import { lazy, memo, Suspense, useRef, useState } from 'react';
 import Markdown from 'react-markdown';
 import type { Components } from 'react-markdown';
-import type { ApprovalDecision, ApprovalRequest, JsonValue, Message, ToolCall, ToolResult } from '@extendo/contracts';
+import type { ApprovalDecision, ApprovalRequest, JsonValue, Message, Subagent, ToolCall, ToolResult } from '@extendo/contracts';
 import type { FileDiff } from './diff';
 import styles from './chat.module.css';
 
@@ -17,8 +17,143 @@ const markdownComponents: Components = {
 type AssistantMessage = Extract<Message, { role: 'assistant' }>;
 type OnApproval = (id: string, decision: ApprovalDecision) => Promise<void>;
 
+const toolLabels: Record<string, string> = {
+  read: 'Read file',
+  readfile: 'Read file',
+  search: 'Search',
+  grep: 'Search',
+  glob: 'Find files',
+  find: 'Find files',
+  edit: 'Edit file',
+  editfile: 'Edit file',
+  write: 'Write file',
+  writefile: 'Write file',
+  patch: 'Edit file',
+  applypatch: 'Edit file',
+  shell: 'Run command',
+  bash: 'Run command',
+  exec: 'Run command',
+  run: 'Run command',
+  check: 'Run checks',
+  test: 'Run tests',
+  runtests: 'Run tests',
+  webfetch: 'Fetch URL',
+  delegate: 'Delegate',
+};
+
+/** Tool ids are machine names; the console shows the action they perform. */
+export function humanizeTool(name: string): string {
+  const key = name.split(/[.:/]/).at(-1)?.replace(/^demo_/, '').replace(/[-_]/g, '').toLowerCase() ?? name;
+  const label = toolLabels[key];
+  if (label) return label;
+  const words = name.replace(/^demo_/, '').replace(/[-_.]+/g, ' ').trim();
+  return words ? words.charAt(0).toUpperCase() + words.slice(1) : name;
+}
+
+const DelegateCard = memo(function DelegateCard({
+  call, subagents, onOpenSubagents, onSubagentApproval, connected,
+}: {
+  call: ToolCall;
+  subagents: Subagent[];
+  onOpenSubagents: () => void;
+  onSubagentApproval: (sessionId: string, requestId: string, decision: ApprovalDecision) => Promise<void>;
+  connected: boolean;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const input = object(call.input) ?? {};
+  const tasks = Array.isArray(input.tasks) ? input.tasks.filter((task): task is Record<string, JsonValue> => Boolean(task) && typeof task === 'object' && !Array.isArray(task)) : [];
+  const roles = tasks.map((task) => typeof task.role === 'string' ? task.role : undefined).filter(Boolean) as string[];
+  const waiting = subagents.filter((subagent) => subagent.approval);
+  const states = subagents.reduce<Record<string, number>>((tally, subagent) => {
+    tally[subagent.state] = (tally[subagent.state] ?? 0) + 1;
+    return tally;
+  }, {});
+  const summary = [
+    states.running ? `${states.running} running` : undefined,
+    states['waiting-approval'] ? `${states['waiting-approval']} waiting on you` : undefined,
+    states.queued ? `${states.queued} queued` : undefined,
+    states.failed ? `${states.failed} failed` : undefined,
+    states.done ? `${states.done} done` : undefined,
+  ].filter(Boolean).join(' · ');
+  return (
+    <div className={styles.tool} data-approval={waiting.length > 0 || undefined}>
+      <div className={styles.delegate}>
+        <button type="button" className={styles.delegateHeader} aria-expanded={expanded}
+          title={`${tasks.length || subagents.length} subagents${roles.length ? `: ${roles.join(', ')}` : ''}`}
+          onClick={() => setExpanded((value) => !value)}>
+          <Asterisk size={15} className={styles.toolIcon} aria-hidden="true" />
+          <span className={styles.toolLabel}>Delegated {tasks.length || subagents.length} subagents</span>
+          {roles.length > 0 && <code className={styles.toolArgument} dir="ltr">{roles.join(', ')}</code>}
+          {summary && <span className={styles.delegateState}>{summary}</span>}
+          <ChevronRight className={styles.disclosure} size={14} aria-hidden="true" data-open={expanded} />
+        </button>
+        {expanded && <ul className={styles.delegateTasks}>
+          {tasks.map((task, index) => (
+            <li key={index}>
+              <bdi dir="auto">{typeof task.title === 'string' ? task.title : `Track ${index + 1}`}</bdi>
+              {typeof task.role === 'string' && <span className={styles.delegateRole}>{task.role}</span>}
+            </li>
+          ))}
+          {tasks.length === 0 && <li>No track details were recorded.</li>}
+        </ul>}
+        <button type="button" className={styles.delegateLink} onClick={onOpenSubagents}>
+          View subagents<ChevronRight size={12} aria-hidden="true" />
+        </button>
+      </div>
+      {waiting.map((subagent) => <SubagentApproval key={subagent.id} subagent={subagent}
+        onApprove={onSubagentApproval} connected={connected} />)}
+    </div>
+  );
+});
+
+const SubagentApproval = memo(function SubagentApproval({
+  subagent, onApprove, connected,
+}: {
+  subagent: Subagent;
+  onApprove: (sessionId: string, requestId: string, decision: ApprovalDecision) => Promise<void>;
+  connected: boolean;
+}) {
+  const [pending, setPending] = useState<ApprovalDecision>();
+  const [failed, setFailed] = useState(false);
+  const request = subagent.approval;
+  if (!request) return null;
+  const target = typeof request.call.input === 'object' && request.call.input && 'path' in request.call.input
+    ? String((request.call.input as { path: unknown }).path) : undefined;
+  async function answer(decision: ApprovalDecision) {
+    if (pending || !connected) return;
+    setPending(decision);
+    setFailed(false);
+    try {
+      await onApprove(subagent.sessionId, request!.requestId, decision);
+    } catch {
+      setFailed(true);
+    } finally {
+      setPending(undefined);
+    }
+  }
+  return (
+    <div className={styles.approval} aria-busy={Boolean(pending)}>
+      <div className={styles.approvalCopy}>
+        <strong>{subagent.title}</strong>
+        <span>
+          Wants to run {humanizeTool(request.call.name)}{target ? <> on <code>{target}</code></> : null} before it continues.
+        </span>
+      </div>
+      <div className={styles.approvalActions}>
+        <button type="button" className={styles.quietButton} disabled={Boolean(pending) || !connected}
+          onClick={() => void answer('always')} title="Always allow this exact action in this session">Always</button>
+        <button type="button" className={styles.quietButton} disabled={Boolean(pending) || !connected}
+          onClick={() => void answer('deny')}>Deny</button>
+        <button type="button" className={styles.primaryButton} disabled={Boolean(pending) || !connected}
+          onClick={() => void answer('allow')}>Allow</button>
+      </div>
+      {failed && <div className={styles.localError} role="alert">Couldn’t send the decision. Try again.</div>}
+    </div>
+  );
+});
+
 export const AssistantStep = memo(function AssistantStep({
-  message, startsReply, streaming, active, approvalByCall, onApproval, connected,
+  message, startsReply, streaming, active, approvalByCall, onApproval, connected, subagents, onOpenSubagents, onSubagentApproval,
 }: {
   message: AssistantMessage;
   startsReply: boolean;
@@ -27,6 +162,9 @@ export const AssistantStep = memo(function AssistantStep({
   approvalByCall?: Map<string, ApprovalRequest>;
   onApproval: OnApproval;
   connected: boolean;
+  subagents: Subagent[];
+  onOpenSubagents: () => void;
+  onSubagentApproval: (sessionId: string, requestId: string, decision: ApprovalDecision) => Promise<void>;
 }) {
   if (!message.content && !message.reasoning && !message.tools.length && !streaming) return null;
   return (
@@ -50,15 +188,18 @@ export const AssistantStep = memo(function AssistantStep({
       {message.tools.length > 0 && (
         <div className={styles.tools}>
           {message.tools.map(({ call, result }) => (
-            <ToolCard
-              key={call.id}
-              call={call}
-              result={result}
-              approval={approvalByCall?.get(call.id)}
-              onApproval={onApproval}
-              active={active}
-              connected={connected}
-            />
+            humanizeTool(call.name) === 'Delegate'
+              ? <DelegateCard key={call.id} call={call} subagents={subagents} onOpenSubagents={onOpenSubagents}
+                onSubagentApproval={onSubagentApproval} connected={connected} />
+              : <ToolCard
+                key={call.id}
+                call={call}
+                result={result}
+                approval={approvalByCall?.get(call.id)}
+                onApproval={onApproval}
+                active={active}
+                connected={connected}
+              />
           ))}
         </div>
       )}
@@ -127,15 +268,14 @@ export const ToolCard = memo(function ToolCard({ call, result, approval, onAppro
   const input = object(call.input);
   const output = object(result?.output);
   const name = (call.name.split(/[.:/]/).at(-1) ?? call.name).replace(/^demo_/, '').replace(/[-_]/g, '').toLowerCase();
-  const test = name === 'test' || name === 'runtests';
+  const test = name === 'test' || name === 'runtests' || name === 'check';
   const read = name === 'read' || name === 'readfile';
   const write = name === 'write' || name === 'writefile' || name === 'edit' || name === 'editfile' || name === 'applypatch';
   const search = name === 'search' || name === 'grep' || name === 'glob' || name === 'find';
   const shell = name === 'shell' || name === 'bash' || name === 'exec' || name === 'runcommand';
   const fetch = name === 'webfetch';
   const Icon = diff || write ? FilePenLine : read ? FileText : search ? Search : shell || test ? Terminal : fetch ? Globe : Wrench;
-  const label = call.name === 'demo_edit' ? 'Preview edit' : call.name === 'demo_check' ? 'Run demo checks'
-    : diff || write ? 'Edit file' : read ? 'Read file' : search ? 'Search' : test ? 'Run tests' : shell ? 'Run command' : fetch ? 'Fetch URL' : call.name;
+  const label = humanizeTool(call.name);
   const path = diff?.path ?? input?.path ?? input?.filePath ?? input?.file;
   const summary = [path, input?.command, input?.cmd, input?.query, input?.pattern, input?.url, output?.path, call.input]
     .find((value): value is string => typeof value === 'string' && Boolean(value.trim()));

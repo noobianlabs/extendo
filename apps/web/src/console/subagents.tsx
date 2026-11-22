@@ -2,6 +2,7 @@ import { ArrowUpRight, CircleCheck, CircleDashed, CircleX, Clock3, Octagon, Send
 import { useId, useState } from 'react';
 import type { ApprovalDecision, Subagent, SubagentActivity, SubagentState, Thread } from '@extendo/contracts';
 import { activityDuration } from '@extendo/contracts';
+import { humanizeTool } from '../chat/messages';
 import styles from './console.module.css';
 
 const groups: { state: SubagentState; label: string }[] = [
@@ -35,7 +36,9 @@ function StateMark({ state }: { state: SubagentState }) {
 function ActivityLine({ activity }: { activity: SubagentActivity }) {
   return <li className={styles.activityLine} data-state={activity.state}>
     <bdi className={styles.activityLabel} dir="auto" title={activity.label}>{activity.label}</bdi>
-    <span className={styles.duration}>{activityDuration(activity)}</span>
+    <span className={styles.duration} title={activity.durationMs === undefined ? undefined : `Took ${activityDuration(activity)}`}>
+      {activityDuration(activity)}
+    </span>
   </li>;
 }
 
@@ -105,9 +108,9 @@ function Approval({ subagent, onApproval }: {
       setState('failed');
     }
   }
-  return <div className={styles.approval} role="group" aria-label={`Approve ${request.call.name} in ${subagent.title}`}>
+  return <div className={styles.approval} role="group" aria-label={`Approve ${humanizeTool(request.call.name)} in ${subagent.title}`}>
     <p className={styles.approvalAsk}>
-      Wants to run <code>{request.call.name}</code>{target ? <> on <code dir="ltr" title={target}>{target}</code></> : null}
+      Wants to run {humanizeTool(request.call.name)}{target ? <> on <code dir="ltr" title={target}>{target}</code></> : null}
     </p>
     <div className={styles.approvalActions}>
       <button type="button" className={styles.allowButton} disabled={state === 'busy'}
@@ -138,7 +141,7 @@ function SubagentRow({ subagent, now, onSteer, onStop, onApproval }: {
       {subagent.role && <span className={styles.role}>{subagent.role}</span>}
       {subagent.state === 'queued' && subagent.position !== undefined
         ? <span className={styles.duration}>#{subagent.position} in queue</span>
-        : time && <span className={styles.duration} title="Elapsed">{time}</span>}
+        : time && <span className={styles.duration} title={`Elapsed ${time}`}>{time}</span>}
     </div>
     {lines.length > 0 && <ul className={styles.activity}>
       {lines.map((activity) => <ActivityLine key={activity.id} activity={activity} />)}

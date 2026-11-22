@@ -1,14 +1,16 @@
+import type { ProviderInfo } from '@extendo/contracts';
 import {
-  ChevronLeft, ChevronRight, ChevronsUpDown, Command, Cpu, Folder,
-  FolderOpen, GitBranch, MessagesSquare, PanelLeft, PanelLeftClose, PanelRight, Plus,
+  ChevronLeft, ChevronRight, ChevronsUpDown, CircleCheck, CircleX, Clock3, Command, Cpu, Folder,
+  FolderOpen, GitBranch, Merge, MessagesSquare, PanelLeft, PanelLeftClose, PanelRight, Plus,
   Search, Settings, X, type LucideIcon,
 } from 'lucide-react';
 import {
   useEffect, useId, useLayoutEffect, useMemo, useRef, useState,
   type KeyboardEvent, type ReactNode, type RefObject,
 } from 'react';
-import type { Project, Thread } from '@extendo/contracts';
+import { subagentCounts, type Project, type Thread } from '@extendo/contracts';
 import { boardLabels, elapsed, groupBoard, threadState, threadSummary } from '../console/board';
+import { ModelPicker } from '../console/modelPicker';
 import board from '../console/console.module.css';
 import './shell.css';
 
@@ -26,6 +28,9 @@ export type ShellLabels = { [K in keyof typeof defaultLabels]: string };
 export interface ShellProps {
   projects: Project[];
   threads: Thread[];
+  providers: ProviderInfo[];
+  selection: { provider: string; model?: string };
+  onSelectModel: (provider: string, model: string) => void;
   projectId?: string;
   thread?: Thread;
   providerLabel: string;
@@ -423,7 +428,13 @@ function ThreadList({
                                   <time dateTime={item.createdAt} title={date.full}>{date.short}</time></>}
                               </span>
                             </span>
-                            {pr && <span className={board.rowPull} data-state={pr.checks} title={`#${pr.number} · ${pr.checks}`}>#{pr.number}</span>}
+                            {pr && <span className={board.rowPull} title={`#${pr.number} · ${pr.merged ? 'merged' : pr.checks}`}>
+                              {pr.merged ? <Merge size={11} aria-hidden="true" />
+                                : pr.checks === 'passing' ? <CircleCheck size={11} aria-hidden="true" />
+                                : pr.checks === 'failing' ? <CircleX size={11} aria-hidden="true" />
+                                : <Clock3 size={11} aria-hidden="true" />}
+                              #{pr.number}
+                            </span>}
                           </button>
                         </li>
                       );
@@ -460,7 +471,8 @@ function ThreadList({
 }
 
 export function Shell({
-  projects, threads, projectId, thread, providerLabel, loading, now, rightOpen, onToggleRight,
+  projects, threads, providers, selection, onSelectModel,
+  projectId, thread, providerLabel, loading, now, rightOpen, onToggleRight,
   onSelectProject, onSelectThread, onNewThread, onOpenProject, onOpenPalette, onOpenSettings,
   children, rail, labels: overrides, usageLabel,
 }: ShellProps) {
@@ -597,8 +609,11 @@ export function Shell({
           >
             <span className="extendo-chrome-settings-leading"><Icon icon={Settings} size={16} /></span>
             <span className="extendo-chrome-action-label extendo-chrome-ellipsis" dir="auto">{labels.settings}</span>
-            {provider && <span className="extendo-chrome-provider extendo-chrome-ellipsis" dir="auto">{provider}</span>}
           </button>
+          <ModelPicker providers={providers} selection={selection} onSelect={(next) => {
+            onSelectModel(next.provider, next.model);
+            closeNav();
+          }} />
         </div>
       </aside>
       <div className="extendo-chrome-workspace">
@@ -617,6 +632,23 @@ export function Shell({
           </button>
           <div className="extendo-chrome-context">
             <h1 className="extendo-chrome-ellipsis" title={title} dir="auto">{title}</h1>
+            {thread && (() => {
+              const state = threadState(thread);
+              const counts = subagentCounts(thread.subagents ?? []);
+              const since = elapsed(thread.stateSince ?? thread.updatedAt, now);
+              const swarm = [
+                counts.waiting ? `${counts.waiting} subagent${counts.waiting === 1 ? '' : 's'} blocked` : undefined,
+                counts.running ? `${counts.running} running` : undefined,
+                counts.queued ? `${counts.queued} queued` : undefined,
+                !counts.waiting && !counts.running && !counts.queued && counts.done ? `${counts.done} done` : undefined,
+              ].filter(Boolean).slice(0, 2);
+              return <span className="extendo-chrome-runstate" data-state={state}>
+                <span className={board.boardDot} data-state={state} aria-hidden="true" />
+                <span>{boardLabels[state]}</span>
+                {since && <span className="extendo-chrome-elapsed">{since}</span>}
+                {swarm.length > 0 && <span className="extendo-chrome-swarm">{swarm.join(' · ')}</span>}
+              </span>;
+            })()}
             {branch && <span className="extendo-chrome-branch extendo-chrome-head-item" title={branch}>
               <Icon icon={GitBranch} size={13} />
               <bdi className="extendo-chrome-ellipsis extendo-chrome-mono">{branch}</bdi>

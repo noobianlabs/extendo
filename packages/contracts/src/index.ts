@@ -190,6 +190,7 @@ export interface PullRequest {
   review: PullRequestReviewState;
   draft: boolean;
   merged: boolean;
+  mergeable?: boolean;
   state: 'open' | 'merged' | 'closed';
 }
 
