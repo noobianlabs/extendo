@@ -147,16 +147,38 @@ function Mark() {
   );
 }
 
+/**
+ * A path shortened to its last few segments, so a tight header still shows the project name
+ * instead of a fragment like "/.no…". The full path stays in the title and for screen readers.
+ */
+function elidePath(path: string, budget = 26): string {
+  const separator = path.includes('\\') ? '\\' : '/';
+  const segments = path.split(/[\\/]+/).filter(Boolean);
+  if (segments.length < 2) return path;
+  const kept: string[] = [];
+  let length = 0;
+  for (let index = segments.length - 1; index >= 0; index -= 1) {
+    const segment = segments[index]!;
+    const next = length + segment.length + (kept.length ? 1 : 0);
+    if (kept.length && next > budget) break;
+    kept.unshift(segment);
+    length = next;
+  }
+  const tail = kept.join(separator);
+  return kept.length < segments.length ? `…${separator}${tail}` : path;
+}
+
 function PathText({ path }: { path: string }) {
-  const end = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
-  if (end < 0 || end === path.length - 1) {
-    return <bdi className="extendo-chrome-ellipsis extendo-chrome-mono" title={path}>{path}</bdi>;
+  const shown = elidePath(path);
+  const end = Math.max(shown.lastIndexOf('/'), shown.lastIndexOf('\\'));
+  if (end < 0 || end === shown.length - 1) {
+    return <bdi className="extendo-chrome-ellipsis extendo-chrome-mono" title={path}>{shown}</bdi>;
   }
   return (
     <span className="extendo-chrome-path extendo-chrome-mono" title={path} dir="ltr">
       <span className="extendo-chrome-sr-only">{path}</span>
-      <span className="extendo-chrome-path-start" aria-hidden="true">{path.slice(0, end + 1)}</span>
-      <bdi className="extendo-chrome-path-end" aria-hidden="true">{path.slice(end + 1)}</bdi>
+      <span className="extendo-chrome-path-start" aria-hidden="true">{shown.slice(0, end + 1)}</span>
+      <bdi className="extendo-chrome-path-end" aria-hidden="true">{shown.slice(end + 1)}</bdi>
     </span>
   );
 }

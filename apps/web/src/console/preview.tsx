@@ -6,18 +6,24 @@ import styles from './console.module.css';
 
 const FRAME_WIDTH = 1280;
 const FRAME_HEIGHT = 800;
+/**
+ * A 1280px page squeezed into a 320px rail renders its own 14px text at 3.5px, which is a
+ * thumbnail rather than a preview. The frame keeps this floor and the pane scrolls, so the
+ * branch's page stays readable instead of shrinking to fit.
+ */
+const MIN_SCALE = 0.75;
 
 /** The branch's page, rendered at desktop width and scaled to fit the rail. */
 export function PreviewPane({ thread, now }: { thread?: Thread; now: number }) {
   const [nonce, setNonce] = useState(0);
-  const [scale, setScale] = useState(0.25);
+  const [scale, setScale] = useState(MIN_SCALE);
   const frame = useRef<HTMLDivElement>(null);
   const preview = thread?.preview;
 
   useLayoutEffect(() => {
     const node = frame.current;
     if (!node) return;
-    const measure = () => setScale(Math.min(1, node.clientWidth / FRAME_WIDTH));
+    const measure = () => setScale(Math.min(1, Math.max(MIN_SCALE, node.clientWidth / FRAME_WIDTH)));
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(node);
@@ -31,6 +37,7 @@ export function PreviewPane({ thread, now }: { thread?: Thread; now: number }) {
   const updated = relativeTime(preview.updatedAt, now);
   const theme = document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
   const src = `${preview.url}${preview.url.includes('?') ? '&' : '?'}theme=${theme}`;
+  const width = Math.round(FRAME_WIDTH * scale);
   const height = Math.round(FRAME_HEIGHT * scale);
   return <div className={styles.previewBody}>
     <div className={styles.previewMeta}>
@@ -50,7 +57,7 @@ export function PreviewPane({ thread, now }: { thread?: Thread; now: number }) {
         <iframe key={`${src}-${nonce}`} className={styles.frame} src={src} title={`${preview.title} preview`}
           sandbox="allow-scripts allow-same-origin" loading="lazy" width={FRAME_WIDTH} height={FRAME_HEIGHT} />
       </div>
-      <div className={styles.frameSpacer} style={{ height }} aria-hidden="true" />
+      <div className={styles.frameSpacer} style={{ inlineSize: width, height }} aria-hidden="true" />
     </div>
   </div>;
 }
