@@ -1,0 +1,22 @@
+{
+  "name": "@extendo/tools",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsdown --dts"
+  },
+  "tsdown": {
+    "fixedExtension": false
+  },
+  "dependencies": {
+    "@extendo/contracts": "workspace:*",
+    "zod": "4.6.7"
+  }
+}
