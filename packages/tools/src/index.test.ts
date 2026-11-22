@@ -18,6 +18,7 @@ beforeEach(async () => {
   calls.length = 0;
   ctx = {
     cwd, sessionId: 'test', turnId: 't', stepId: 's', signal: new AbortController().signal,
+    provider: 'demo', model: 'demo', interactive: false,
     ctx: { async serial(key: string) { calls.push(key); } } as unknown as Ctx,
   };
 });

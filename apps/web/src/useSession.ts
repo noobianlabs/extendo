@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { AgentStatus, ApprovalRequest, Message, RpcEvent, SessionEvent, SessionSnapshot } from '@extendo/contracts';
+import type { Thread } from '@extendo/contracts';
 import { api, RpcSocket } from './api';
 
 type Assistant = Extract<Message, { role: 'assistant' }>;
@@ -63,7 +64,7 @@ function settle(state: SessionView, event: SessionEvent): SessionView {
 }
 
 export function reduceSession(state: SessionView, frame: RpcEvent): SessionView {
-  if (frame.data.sessionId !== state.sessionId) return state;
+  if (!('sessionId' in frame.data) || frame.data.sessionId !== state.sessionId) return state;
   switch (frame.event) {
     case 'session/event': return settle(state, frame.data.event);
     case 'agent/status':
@@ -84,10 +85,16 @@ export function reduceSession(state: SessionView, frame: RpcEvent): SessionView 
           ? { ...draft, content: draft.content + frame.data.delta }
           : { ...draft, reasoning: (draft.reasoning ?? '') + frame.data.delta } };
     }
+    default: return state;
   }
 }
 
-export function useSession(sessionId: string | undefined, onStatus: (sessionId: string, status: AgentStatus) => void, paused = false) {
+export function useSession(
+  sessionId: string | undefined,
+  onStatus: (sessionId: string, status: AgentStatus) => void,
+  onThread?: (thread: Thread) => void,
+  paused = false,
+) {
   const [view, setView] = useState<SessionView>(() => empty(sessionId));
   const socket = useRef<RpcSocket | undefined>(undefined);
 
@@ -108,6 +115,10 @@ export function useSession(sessionId: string | undefined, onStatus: (sessionId: 
     const connect = () => {
       if (stopped) return;
       const peer = new RpcSocket((event) => {
+        if (event.event === 'thread/updated') {
+          onThread?.(event.data.thread);
+          return;
+        }
         update((current) => reduceSession(current, event));
         if (event.event === 'agent/status' && event.data.sessionId === sessionId) onStatus(sessionId, event.data.status);
       }, () => {
@@ -138,7 +149,7 @@ export function useSession(sessionId: string | undefined, onStatus: (sessionId: 
       socket.current?.close();
       socket.current = undefined;
     };
-  }, [sessionId, onStatus, paused]);
+  }, [sessionId, onStatus, onThread, paused]);
 
   return { view: view.sessionId === sessionId ? view : empty(sessionId), socket };
 }

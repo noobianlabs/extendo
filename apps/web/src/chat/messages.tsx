@@ -134,7 +134,7 @@ export const ToolCard = memo(function ToolCard({ call, result, approval, onAppro
   const shell = name === 'shell' || name === 'bash' || name === 'exec' || name === 'runcommand';
   const fetch = name === 'webfetch';
   const Icon = diff || write ? FilePenLine : read ? FileText : search ? Search : shell || test ? Terminal : fetch ? Globe : Wrench;
-  const label = call.name === 'demo_edit' ? 'Preview edit' : call.name === 'demo_test' ? 'Run demo checks'
+  const label = call.name === 'demo_edit' ? 'Preview edit' : call.name === 'demo_check' ? 'Run demo checks'
     : diff || write ? 'Edit file' : read ? 'Read file' : search ? 'Search' : test ? 'Run tests' : shell ? 'Run command' : fetch ? 'Fetch URL' : call.name;
   const path = diff?.path ?? input?.path ?? input?.filePath ?? input?.file;
   const summary = [path, input?.command, input?.cmd, input?.query, input?.pattern, input?.url, output?.path, call.input]

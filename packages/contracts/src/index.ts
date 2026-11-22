@@ -60,6 +60,9 @@ export interface ToolCtx {
   sessionId: string;
   turnId: string;
   stepId: string;
+  provider: string;
+  model: string;
+  interactive: boolean;
   cwd: string;
   signal: AbortSignal;
 }
@@ -133,6 +136,75 @@ export type AgentStatus = 'idle' | 'working' | 'waiting' | 'failed';
 export type TurnOutcome = 'completed' | 'cancelled' | 'failed' | 'interrupted';
 export type StepRef = { turnId: string; stepId: string };
 
+/** What a thread needs from a person, derived from durable state. */
+export type ThreadState = 'idle' | 'working' | 'queued' | 'waiting-approval' | 'waiting-review' | 'done' | 'failed';
+
+export type SubagentState = 'queued' | 'running' | 'waiting-approval' | 'done' | 'failed' | 'stopped';
+
+export type ActivityKind = 'read' | 'search' | 'patch' | 'run' | 'tool' | 'note';
+
+export interface SubagentActivity {
+  id: string;
+  kind: ActivityKind;
+  label: string;
+  detail?: string;
+  state: 'running' | 'done' | 'failed';
+  startedAt: string;
+  durationMs?: number;
+}
+
+export interface SubagentApproval {
+  requestId: string;
+  call: ToolCall;
+}
+
+export interface Subagent {
+  id: string;
+  title: string;
+  role?: string;
+  sessionId: string;
+  state: SubagentState;
+  approval?: SubagentApproval;
+  position?: number;
+  startedAt?: string;
+  endedAt?: string;
+  activity: SubagentActivity[];
+  report?: string;
+  error?: string;
+}
+
+export type PullRequestCheckState = 'passing' | 'failing' | 'pending' | 'none';
+export type PullRequestReviewState = 'approved' | 'changes-requested' | 'pending' | 'none';
+
+export interface PullRequest {
+  number: number;
+  title: string;
+  url: string;
+  branch: string;
+  base: string;
+  additions: number;
+  deletions: number;
+  changedFiles: number;
+  checks: PullRequestCheckState;
+  checksSummary?: string;
+  review: PullRequestReviewState;
+  draft: boolean;
+  merged: boolean;
+  state: 'open' | 'merged' | 'closed';
+}
+
+export interface SwarmTask {
+  title: string;
+  prompt: string;
+  role?: string;
+}
+
+export interface SwarmPlan {
+  title: string;
+  concurrency?: number;
+  tasks: SwarmTask[];
+}
+
 export interface SessionEventData {
   'session/created': Session;
   'turn/start': { turnId: string; provider: string; model: string };
@@ -145,6 +217,14 @@ export interface SessionEventData {
   'tool/call': StepRef & { call: ToolCall };
   'tool/result': StepRef & { result: ToolResult };
   'context/compacted': { turnId: string; throughSeq: number; summary: string };
+  'subagent/spawned': { subagentId: string; title: string; role?: string; sessionId: string; parentTurnId: string; position?: number };
+  'subagent/queued': { subagentId: string; position: number };
+  'subagent/started': { subagentId: string };
+  'subagent/activity': { subagentId: string; activity: SubagentActivity };
+  'subagent/report': { subagentId: string; outcome: 'completed' | 'failed' | 'stopped'; report: string; error?: string };
+  'subagent/steered': { subagentId: string; message: string };
+  'subagent/approval': { subagentId: string; request: ApprovalRequest };
+  'subagent/approval-answered': { subagentId: string; requestId: string; decision: ApprovalDecision };
 }
 
 export type SessionEventType = keyof SessionEventData;
@@ -170,6 +250,8 @@ export interface Events extends Omit<SessionEventData, 'session/created'> {
   'assistant/tool-call': StepRef & { sessionId: string; messageId: string; call: ToolCall };
   'tool/approval': ApprovalRequest;
   'tool/approval-answered': { sessionId: string; requestId: string; decision: ApprovalDecision };
+  'pull-request/updated': { sessionId: string; pullRequest: PullRequest };
+  'thread/updated': { thread: Thread };
   'fs/read': { sessionId: string; path: string };
   'fs/write': { sessionId: string; path: string };
   'tools/register': { name: string };
@@ -192,6 +274,13 @@ export interface Project {
   path: string;
 }
 
+export interface Preview {
+  label: string;
+  title: string;
+  url: string;
+  updatedAt?: string;
+}
+
 export interface Thread {
   id: string;
   projectId: string;
@@ -203,6 +292,13 @@ export interface Thread {
   status: AgentStatus;
   createdAt: string;
   branch?: string;
+  repo?: string;
+  state?: ThreadState;
+  stateSince?: string;
+  updatedAt?: string;
+  pullRequest?: PullRequest;
+  subagents?: Subagent[];
+  preview?: Preview;
 }
 
 export interface ProviderInfo {
@@ -230,12 +326,20 @@ export interface SessionSnapshot {
 const sessionId = z.string().min(1).max(128);
 const selection = z.string().min(1).max(256);
 const id = z.union([z.string().min(1).max(128), z.number().int()]);
+const subagentId = z.string().min(1).max(128);
+const messageMode = z.enum(['auto', 'steer', 'queue']);
 const methods = {
-  'send-message': z.object({ sessionId, content: z.string().trim().min(1).max(128_000), provider: selection.optional(), model: selection.optional() }),
+  'send-message': z.object({
+    sessionId, content: z.string().trim().min(1).max(128_000), provider: selection.optional(), model: selection.optional(),
+    mode: messageMode.optional(),
+  }),
   cancel: z.object({ sessionId }),
   'answer-approval': z.object({ sessionId, requestId: z.string().min(1).max(128), decision: z.enum(['allow', 'deny', 'always']) }),
   subscribe: z.object({ sessionId, afterSeq: z.number().int().nonnegative().optional() }),
   unsubscribe: z.object({ sessionId }),
+  'subagent-steer': z.object({ sessionId, subagentId, message: z.string().trim().min(1).max(32_000) }),
+  'subagent-stop': z.object({ sessionId, subagentId }),
+  'pull-request-merge': z.object({ sessionId }),
 } as const;
 
 export const rpcRequestSchema = z.discriminatedUnion('method', [
@@ -244,25 +348,35 @@ export const rpcRequestSchema = z.discriminatedUnion('method', [
   z.object({ id, method: z.literal('answer-approval'), params: methods['answer-approval'] }),
   z.object({ id, method: z.literal('subscribe'), params: methods.subscribe }),
   z.object({ id, method: z.literal('unsubscribe'), params: methods.unsubscribe }),
+  z.object({ id, method: z.literal('subagent-steer'), params: methods['subagent-steer'] }),
+  z.object({ id, method: z.literal('subagent-stop'), params: methods['subagent-stop'] }),
+  z.object({ id, method: z.literal('pull-request-merge'), params: methods['pull-request-merge'] }),
 ]);
 
 export type RpcRequest = z.infer<typeof rpcRequestSchema>;
 export type RpcId = RpcRequest['id'];
+export type MessageMode = 'auto' | 'steer' | 'queue';
+export type MessageDelivery = 'started' | 'steered' | 'queued';
 export interface RpcResults {
-  'send-message': { turnId: string };
+  'send-message': { turnId?: string; mode: MessageDelivery };
   cancel: { cancelled: boolean };
   'answer-approval': { accepted: boolean };
   subscribe: { lastSeq: number; status: AgentStatus; approvals: ApprovalRequest[] };
   unsubscribe: { ok: true };
+  'subagent-steer': { steered: boolean };
+  'subagent-stop': { stopped: boolean };
+  'pull-request-merge': { merged: boolean; pullRequest?: PullRequest };
 }
 export type RpcResponse<M extends keyof RpcResults = keyof RpcResults> =
   | { id: RpcId; result: RpcResults[M] }
   | { id: RpcId | null; error: { code: string; message: string } };
 
-export type RpcEventName = 'session/event' | 'agent/status' | 'agent/error' | 'assistant/delta' | 'assistant/tool-call' | 'tool/approval' | 'tool/approval-answered';
+export type RpcEventName = 'session/event' | 'agent/status' | 'agent/error' | 'assistant/delta' | 'assistant/tool-call' | 'tool/approval' | 'tool/approval-answered' | 'pull-request/updated' | 'thread/updated';
 export type RpcEvent = { [K in RpcEventName]: { event: K; data: Events[K] } }[RpcEventName];
 export type RpcServerFrame = RpcResponse | RpcEvent;
 
 export interface CreateProjectRequest { name?: string; path: string }
 export interface CreateThreadRequest { projectId?: string; title?: string; provider?: string; model?: string }
 export interface UpdateSettingsRequest { provider: string; model?: string }
+
+export * from './derive.js';

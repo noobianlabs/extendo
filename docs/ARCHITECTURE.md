@@ -10,8 +10,8 @@ A `Plugin` has a name and an `apply(ctx)` function. Register services, listeners
 
 | Kind | Names |
 | --- | --- |
-| Durable | `session/created`, `turn/start`, `turn/end`, `step/start`, `step/end`, `user/message`, `assistant/message`, `assistant/attempt`, `tool/call`, `tool/result`, `context/compacted` |
-| Live | `session/event`, `agent/status`, `agent/error`, `assistant/delta`, `assistant/tool-call`, `tool/approval`, `tool/approval-answered` |
+| Durable | `session/created`, `turn/start`, `turn/end`, `step/start`, `step/end`, `user/message`, `assistant/message`, `assistant/attempt`, `tool/call`, `tool/result`, `context/compacted`, `subagent/spawned`, `subagent/queued`, `subagent/started`, `subagent/activity`, `subagent/report`, `subagent/steered`, `subagent/approval`, `subagent/approval-answered` |
+| Live | `session/event`, `agent/status`, `agent/error`, `assistant/delta`, `assistant/tool-call`, `tool/approval`, `tool/approval-answered`, `pull-request/updated`, `thread/updated` |
 | Waterfall | `agent/pre-step`, `agent/request`, `llm/stream`, `tools/pre-execute`, `tools/execute`, `tools/post-execute` |
 | Capability seams | `fs/read`, `fs/write`, `tools/register`, `llm/register`, `telemetry/event` |
 
@@ -23,6 +23,16 @@ SQLite is authoritative; rows are appended per session with sequence numbers sta
 
 The message projection groups tool calls and results under their assistant step. Clients can render historical data by loading the session snapshot or folding its ordered events, then attach transient text/reasoning deltas by `messageId`. Failed partial assistant attempts are retained for diagnostics and don't enter ordinary model history. A turn can have no steps if an input is rejected; each admitted step performs one model stream and settles that step's calls before the next model request. Tools declare a Zod input schema, which is also converted to model-facing JSON Schema. Providers return an async stream of text, reasoning, tool-call, usage, completion or error chunks.
 
+## Delegated work
+
+Delegation is a child session running a real turn, not a second orchestration loop. `@extendo/swarm` registers the `delegate` tool with a run queue per parent session; a spawned run appends `subagent/spawned`, waits its turn with `subagent/queued` plus a position, and starts with `subagent/started`. The child's own tool calls and results become `subagent/activity` lines with measured durations, its last assistant message becomes the `subagent/report`, and a child approval is forwarded as `subagent/approval`. `subagent-steer` reaches a running or approval-blocked child through `AgentRuntime.steer`; `subagent-stop` cancels it or drops it from the queue.
+
+The parent's log is the only source of truth: `projectSubagents` folds those events back into the swarm the console renders, so a reload reconstructs exactly what was on screen. `deriveThreadState` then answers what the thread needs from a person, in this order: a waiting approval, an open turn or running run, a queued run, a pull request waiting on review, then the last turn's outcome.
+
+## Pull requests and previews
+
+`@extendo/pullrequests` reads the open pull request for a thread's branch, either through `gh pr view` or from a scripted reader for the keyless demo. The server's `ThreadViewer` joins three things per thread: the stored row, the derived state plus swarm, and the pull request, caching the read for twenty seconds and the derivation until the session's last sequence number changes. `pull-request-merge` merges only when the reader supports it. `GET /api/preview/:sessionId` renders the branch's page from the demo workspace, and the console iframes it beside the review.
+
 ## RPC and HTTP
 
 The WebSocket endpoint is `/ws`. Requests are `{ id, method, params }` and responses are `{ id, result }` or `{ id, error: { code, message } }`. Unsolicited messages are `{ event, data }`. IDs are request correlation values; `sessionId` is the stable key for subscription, cancellation, message submission and approval answers.
@@ -31,8 +41,13 @@ The WebSocket endpoint is `/ws`. Requests are `{ id, method, params }` and respo
 | --- | --- | --- |
 | `subscribe` | `sessionId`, optional `afterSeq` | `lastSeq`, live `status`, pending `approvals`; catches up durable events after the cursor |
 | `unsubscribe` | `sessionId` | `ok` |
-| `send-message` | `sessionId`, `content`, optional `provider` and `model` | `turnId`; execution continues on the event channel |
+| `send-message` | `sessionId`, `content`, optional `provider`, `model` and `mode` (`auto`, `steer`, `queue`) | `mode` (`started` with `turnId`, `steered`, or `queued`); execution continues on the event channel |
 | `cancel` | `sessionId` | `cancelled` |
-| `answer-approval` | `sessionId`, `requestId`, `decision` (`allow`, `deny`, `always`) | `accepted` |
+| `answer-approval` | `sessionId`, `requestId`, `decision` (`allow`, `deny`, `always`) | `accepted`; the session may be a child session |
+| `subagent-steer` | `sessionId`, `subagentId`, `message` | `steered` |
+| `subagent-stop` | `sessionId`, `subagentId` | `stopped` |
+| `pull-request-merge` | `sessionId` | `merged`, and the pull request when the reader returns it |
 
-REST clients use `/api/threads`, `/api/projects`, `/api/settings`, `/api/providers`, `/api/sessions/:id` for the message projection, and `/api/sessions/:id/events?afterSeq=0` for replay. `/api/health` is the liveness endpoint.
+`thread/updated` carries a whole `Thread` to every socket when a subscribed session appends an event; the server coalesces those snapshots on a 120 ms timer, so the status board, the operation bar, and the swarm move together without a poll. `pull-request/updated` carries a refreshed pull request.
+
+REST clients use `/api/threads` (rows joined with derived state, swarm, and pull request), `/api/projects`, `/api/settings`, `/api/providers`, `/api/sessions/:id` for the message projection, `/api/sessions/:id/events?afterSeq=0` for replay, and `/api/preview/:sessionId` for the branch preview. `/api/health` is the liveness endpoint.

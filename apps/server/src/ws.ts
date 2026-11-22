@@ -5,25 +5,53 @@ import { rpcRequestSchema, type RpcEventName, type RpcId, type RpcServerFrame } 
 import { allowsUpgrade } from './http.js';
 import type { Runtime } from './runtime.js';
 
-const liveEvents: RpcEventName[] = ['session/event', 'agent/status', 'agent/error', 'assistant/delta', 'assistant/tool-call', 'tool/approval', 'tool/approval-answered'];
+const liveEvents: RpcEventName[] = ['session/event', 'agent/status', 'agent/error', 'assistant/delta', 'tool/approval', 'tool/approval-answered', 'pull-request/updated'];
 
+/**
+ * Wires the browser client to the runtime: session-scoped live events, coalesced thread snapshots
+ * for the status board, and the steering, stopping, and merging the console needs.
+ */
 export function attachRpc(server: Server, runtime: Runtime, devOrigins?: string[]): () => Promise<void> {
+  const { sessions, workspace, agent, swarm, viewer } = runtime;
   const wss = new WebSocketServer({ noServer: true, maxPayload: 512 * 1024 });
   const subscriptions = new Map<WebSocket, Set<string>>();
-  const listeners = liveEvents.map((name) =>
-    runtime.ctx.on(name, (data) => {
-      for (const [peer, sessions] of subscriptions) {
-        if (sessions.has(data.sessionId)) send(peer, { event: name, data } as RpcServerFrame);
-      }
-    }),
-  );
+  const timers = new Set<NodeJS.Timeout>();
+
   function send(peer: WebSocket, frame: RpcServerFrame) {
     if (peer.readyState !== WebSocket.OPEN) return;
     if (peer.bufferedAmount > 4 * 1024 * 1024) {
-      peer.close(1013, 'Reconnect and resume from your last event cursor');
+      peer.close(1013, 'Reconnect and resubscribe');
       return;
     }
     peer.send(JSON.stringify(frame));
+  }
+
+  const listeners = liveEvents.map((name) => runtime.ctx.on(name, (data) => {
+    if (!('sessionId' in data)) return;
+    const { sessionId } = data as { sessionId: string };
+    for (const [peer, sessionIds] of subscriptions) {
+      if (sessionIds.has(sessionId)) send(peer, { event: name, data } as RpcServerFrame);
+    }
+    if (name === 'session/event') refresh(sessionId);
+  }));
+
+  let scheduled: NodeJS.Timeout | undefined;
+  const dirty = new Set<string>();
+  function refresh(sessionId: string) {
+    dirty.add(sessionId);
+    if (scheduled) return;
+    scheduled = setTimeout(() => {
+      timers.delete(scheduled!);
+      scheduled = undefined;
+      const ids = [...dirty];
+      dirty.clear();
+      for (const id of ids) {
+        void viewer.get(id).then((thread) => {
+          if (thread) for (const peer of subscriptions.keys()) send(peer, { event: 'thread/updated', data: { thread } });
+        }).catch(() => {});
+      }
+    }, 120);
+    timers.add(scheduled);
   }
 
   const upgrade = (request: IncomingMessage, socket: Duplex, head: Buffer) => {
@@ -34,70 +62,114 @@ export function attachRpc(server: Server, runtime: Runtime, devOrigins?: string[
     wss.handleUpgrade(request, socket, head, (peer) => wss.emit('connection', peer, request));
   };
   server.on('upgrade', upgrade);
+
   wss.on('connection', (peer) => {
     const listening = new Set<string>();
     subscriptions.set(peer, listening);
     peer.on('close', () => subscriptions.delete(peer));
     peer.on('error', () => subscriptions.delete(peer));
-    peer.on('message', (raw, binary) => {
+    peer.on('message', async (raw, binary) => {
       let value: unknown;
       let id: RpcId | null = null;
-      const error = (code: string, message: string) => send(peer, { id, error: { code, message } });
-      if (binary) { error('INVALID_REQUEST', 'Expected a text frame'); return; }
-      try { value = JSON.parse(String(raw)); }
-      catch { error('INVALID_JSON', 'Expected a JSON object'); return; }
-      if (value && typeof value === 'object' && 'id' in value) {
-        const candidate = value.id;
-        if ((typeof candidate === 'string' && candidate.length <= 128) || (typeof candidate === 'number' && Number.isSafeInteger(candidate))) id = candidate;
-      }
+      const fail = (code: string, message: string) => send(peer, { id, error: { code, message } });
+      if (binary) return fail('INVALID_REQUEST', 'Text frames only');
+      try { value = JSON.parse(String(raw)); } catch { return fail('INVALID_JSON', 'Expected a JSON object'); }
       const parsed = rpcRequestSchema.safeParse(value);
-      if (!parsed.success) { error('INVALID_REQUEST', 'Invalid RPC method or parameters'); return; }
+      if (!parsed.success) return fail('INVALID_REQUEST', 'Unknown method or parameters');
       const request = parsed.data;
+      id = request.id;
       const sessionId = request.params.sessionId;
-      const { sessions, workspace, agent } = runtime;
-      if (!sessions.get(sessionId)) { error('NOT_FOUND', 'Unknown session'); return; }
       try {
         switch (request.method) {
           case 'subscribe': {
-            const after = request.params.afterSeq ?? 0;
             listening.add(sessionId);
-            send(peer, { id: request.id, result: { lastSeq: sessions.lastSeq(sessionId), status: agent.status(sessionId), approvals: agent.approvals(sessionId) } });
-            for (const event of sessions.replay(sessionId, after)) send(peer, { event: 'session/event', data: { sessionId, event } });
-            break;
+            send(peer, { id, result: { lastSeq: sessions.lastSeq(sessionId), status: agent.status(sessionId), approvals: agent.approvals(sessionId) } });
+            for (const event of sessions.replay(sessionId, request.params.afterSeq)) send(peer, { event: 'session/event', data: { sessionId, event } });
+            void viewer.get(sessionId).then((thread) => { if (thread) send(peer, { event: 'thread/updated', data: { thread } }); }).catch(() => {});
+            return;
           }
-          case 'unsubscribe':
+          case 'unsubscribe': {
             listening.delete(sessionId);
-            send(peer, { id: request.id, result: { ok: true } });
-            break;
+            send(peer, { id, result: { ok: true } });
+            return;
+          }
           case 'send-message': {
-            const thread = workspace.threadBySession(agent, sessionId);
+            const thread = workspace.threadBySession(sessionId);
             const settings = workspace.settings();
             const provider = request.params.provider ?? thread?.provider ?? settings.provider;
             const model = request.params.model ?? (thread?.provider === provider ? thread.model : settings.provider === provider ? settings.model : undefined);
             const selection = runtime.model(provider, model);
-            const turn = agent.start(sessionId, request.params.content, { ...selection, interactive: true });
-            if (thread && (thread.provider !== selection.provider || thread.model !== selection.model)) workspace.updateThreadModel(sessionId, selection.provider, selection.model);
-            void turn.done.catch(() => runtime.ctx.logger.error('Turn could not be settled'));
-            send(peer, { id: request.id, result: { turnId: turn.turnId } });
-            break;
+            if (thread && (thread.provider !== selection.provider || thread.model !== selection.model)) {
+              workspace.updateThreadModel(sessionId, selection.provider, selection.model);
+            }
+            const mode = request.params.mode ?? 'auto';
+            const text = request.params.content;
+            if (mode === 'steer' || (mode === 'auto' && agent.status(sessionId) === 'working')) {
+              if (agent.steer(sessionId, text)) {
+                send(peer, { id, result: { mode: 'steered' } });
+                refresh(sessionId);
+                return;
+              }
+            }
+            if (mode === 'queue' || agent.status(sessionId) === 'working') {
+              const queued = agent.queue(sessionId, text, { ...selection, interactive: true });
+              send(peer, { id, result: { mode: queued ? 'queued' : 'steered' } });
+              refresh(sessionId);
+              return;
+            }
+            const handle = agent.start(sessionId, text, { ...selection, interactive: true });
+            send(peer, { id, result: { mode: 'started', turnId: handle.turnId } });
+            refresh(sessionId);
+            return;
           }
-          case 'cancel':
-            send(peer, { id: request.id, result: { cancelled: agent.cancel(sessionId) } });
-            break;
-          case 'answer-approval':
-            send(peer, { id: request.id, result: { accepted: agent.answer(sessionId, request.params.requestId, request.params.decision) } });
-            break;
+          case 'cancel': {
+            send(peer, { id, result: { cancelled: agent.cancel(sessionId) } });
+            refresh(sessionId);
+            return;
+          }
+          case 'answer-approval': {
+            const accepted = agent.answer(sessionId, request.params.requestId, request.params.decision);
+            send(peer, { id, result: { accepted } });
+            refresh(sessionId);
+            return;
+          }
+          case 'subagent-steer': {
+            const steered = swarm.steer(sessionId, request.params.subagentId, request.params.message);
+            send(peer, { id, result: { steered } });
+            refresh(sessionId);
+            return;
+          }
+          case 'subagent-stop': {
+            const stopped = swarm.stop(sessionId, request.params.subagentId);
+            send(peer, { id, result: { stopped } });
+            refresh(sessionId);
+            return;
+          }
+          case 'pull-request-merge': {
+            const thread = workspace.threadBySession(sessionId);
+            const reader = runtime.pullRequests;
+            if (!thread?.branch || typeof reader.merge !== 'function') {
+              return fail('UNSUPPORTED', 'This thread cannot be merged from Extendo');
+            }
+            const merged = await reader.merge(thread.branch, thread.cwd);
+            if (!merged) return fail('FAILED', 'The pull request could not be merged');
+            viewer.invalidate(sessionId);
+            send(peer, { id, result: { merged: true, pullRequest: merged } });
+            refresh(sessionId);
+            return;
+          }
         }
-      } catch (failure) {
-        error('REQUEST_FAILED', failure instanceof Error ? failure.message : 'Extendo could not complete the request');
+      } catch (error) {
+        fail('FAILED', error instanceof Error ? error.message : 'Extendo could not complete the request');
       }
     });
   });
 
-  return () => new Promise<void>((resolve, reject) => {
-    server.off('upgrade', upgrade);
+  return () => new Promise<void>((resolve) => {
+    for (const timer of timers) clearTimeout(timer);
     for (const dispose of listeners) dispose();
+    server.off('upgrade', upgrade);
     for (const peer of wss.clients) peer.terminate();
-    wss.close((error) => error ? reject(error) : resolve());
+    wss.close(() => resolve());
   });
 }

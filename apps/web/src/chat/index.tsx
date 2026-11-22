@@ -34,6 +34,7 @@ export function ChatSurface({
   const [away, setAway] = useState(false);
   const [suggestion, setSuggestion] = useState<{ text: string }>();
   const running = status === 'working' || status === 'waiting' || approvals.length > 0;
+  const steering = status === 'working' && approvals.length === 0;
   const loadingEmpty = loading && !messages.length && !draft && !approvals.length;
   const approvalsByStep = useMemo(() => {
     const steps = new Map<string, Map<string, ApprovalRequest>>();
@@ -178,6 +179,7 @@ export function ChatSurface({
       </span>
       <Composer
         running={running}
+        steering={steering}
         waiting={status === 'waiting' || Boolean(approvals.length)}
         loading={loading}
         needsProvider={needsProvider}

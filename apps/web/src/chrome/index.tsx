@@ -7,7 +7,10 @@ import {
   useEffect, useId, useLayoutEffect, useMemo, useRef, useState,
   type KeyboardEvent, type ReactNode, type RefObject,
 } from 'react';
-import type { AgentStatus, Project, Thread } from '@extendo/contracts';
+import type { Project, Thread } from '@extendo/contracts';
+import { boardLabels, elapsed, groupBoard, threadState, threadSummary } from '../console/board';
+import { useNow } from '../console/useNow';
+import board from '../console/console.module.css';
 import './shell.css';
 
 const defaultLabels = {
@@ -42,13 +45,6 @@ export interface ShellProps {
   usageLabel?: string;
 }
 
-const statusLabels: Record<AgentStatus, string> = {
-  idle: 'Idle',
-  working: 'Working',
-  waiting: 'Waiting',
-  failed: 'Failed',
-};
-
 const pageSize = 40;
 const countFormat = new Intl.NumberFormat();
 const dateFormat = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' });
@@ -60,13 +56,14 @@ const projectName = (project: Project) => project.name?.trim() || 'Untitled proj
 const threadName = (thread: Thread) => thread.title?.trim() || 'Untitled thread';
 const normalizeSearch = (value: string) => value.normalize('NFKD').replace(/\p{Mark}/gu, '').toLocaleLowerCase();
 
-function formatThreadDate(value: string, now: Date) {
+function formatThreadDate(value: string, now: number) {
   const date = new Date(value);
   if (!value || !Number.isFinite(date.getTime()) || date.getTime() === 0) return;
-  const isToday = date.toDateString() === now.toDateString();
+  const today = new Date(now);
+  const isToday = date.toDateString() === today.toDateString();
   return {
     short: isToday ? relativeDateFormat.format(0, 'day')
-      : (date.getFullYear() === now.getFullYear() ? dateFormat : dateYearFormat).format(date),
+      : (date.getFullYear() === today.getFullYear() ? dateFormat : dateYearFormat).format(date),
     full: fullDateFormat.format(date),
   };
 }
@@ -143,10 +140,6 @@ function Mark() {
       <path d="M15.75 13.75h2.75v2.75h-2.75z" />
     </svg>
   );
-}
-
-function StatusDot({ status }: { status: AgentStatus }) {
-  return <span className="extendo-chrome-status-dot" data-status={status} aria-hidden="true" />;
 }
 
 function PathText({ path }: { path: string }) {
@@ -315,7 +308,7 @@ function ThreadList({
   const start = page * pageSize;
   const visible = filtered.slice(start, start + pageSize);
   const tabId = [focusedId, activeId].find(id => visible.some(({ item }) => item.id === id)) ?? visible[0]?.item.id;
-  const now = new Date();
+  const now = useNow(30_000);
 
   function getRows() {
     return Array.from(listRef.current?.querySelectorAll<HTMLButtonElement>('[data-thread-row]') ?? []);
@@ -391,38 +384,51 @@ function ThreadList({
       <div className="extendo-chrome-thread-scroll" ref={listRef} aria-busy={loading}>
         {visible.length > 0 ? (
           <ul className="extendo-chrome-thread-list" onKeyDown={moveRowFocus}>
-            {visible.map(({ item }) => {
-              const title = threadName(item);
-              const status = statusLabels[item.status];
-              const date = formatThreadDate(item.createdAt, now);
-              const branch = item.branch?.trim();
-              const details = [title, status, branch, date?.full].filter(Boolean).join(' · ');
+            {groupBoard(visible.map(({ item }) => item)).map(({ state, threads: rows }) => {
+              const total = filtered.filter(({ item }) => threadState(item) === state).length;
               return (
-                <li key={item.id}>
-                  <button
-                    type="button"
-                    data-thread-row=""
-                    aria-current={item.id === activeId ? 'page' : undefined}
-                    tabIndex={item.id === tabId ? 0 : -1}
-                    className="extendo-chrome-thread-row"
-                    title={details}
-                    aria-label={details}
-                    onFocus={() => setFocusedId(item.id)}
-                    onClick={() => onSelect(item.id)}
-                  >
-                    <StatusDot status={item.status} />
-                    <span className="extendo-chrome-thread-label">
-                      <bdi className="extendo-chrome-ellipsis extendo-chrome-thread-title">{title}</bdi>
-                      {(date || item.status !== 'idle' || branch) && (
-                        <span className="extendo-chrome-thread-meta">
-                          {item.status !== 'idle' && <span>{status}</span>}
-                          {item.status !== 'idle' && date && <span className="extendo-chrome-meta-dot">·</span>}
-                          {date ? <time dateTime={item.createdAt} title={date.full}>{date.short}</time>
-                            : item.status === 'idle' && branch && <bdi className="extendo-chrome-ellipsis extendo-chrome-mono">{branch}</bdi>}
-                        </span>
-                      )}
-                    </span>
-                  </button>
+                <li key={state} className={board.boardGroup}>
+                  <h3 className={board.boardHeading} id={`${headingId}-${state}`}>
+                    {boardLabels[state]}<span>{countFormat.format(total)}</span>
+                  </h3>
+                  <ul className={board.nestedList} aria-labelledby={`${headingId}-${state}`}>
+                    {rows.map((item) => {
+                      const title = threadName(item);
+                      const state = threadState(item);
+                      const date = formatThreadDate(item.createdAt, now);
+                      const summary = threadSummary(item);
+                      const since = elapsed(item.stateSince ?? item.updatedAt, now);
+                      const pr = item.pullRequest;
+                      const details = [title, boardLabels[state], summary, item.branch, date?.full].filter(Boolean).join(' · ');
+                      return (
+                        <li key={item.id}>
+                          <button
+                            type="button"
+                            data-thread-row=""
+                            aria-current={item.id === activeId ? 'page' : undefined}
+                            tabIndex={item.id === tabId ? 0 : -1}
+                            className="extendo-chrome-thread-row"
+                            title={details}
+                            aria-label={details}
+                            onFocus={() => setFocusedId(item.id)}
+                            onClick={() => onSelect(item.id)}
+                          >
+                            <span className={board.boardDot} data-state={state} aria-hidden="true" />
+                            <span className="extendo-chrome-thread-label">
+                              <bdi className="extendo-chrome-ellipsis extendo-chrome-thread-title">{title}</bdi>
+                              <span className="extendo-chrome-thread-meta">
+                                <span>{summary ?? boardLabels[state]}</span>
+                                {since && state !== 'idle' && <><span className="extendo-chrome-meta-dot">·</span><span>{since}</span></>}
+                                {!since && date && <><span className="extendo-chrome-meta-dot">·</span>
+                                  <time dateTime={item.createdAt} title={date.full}>{date.short}</time></>}
+                              </span>
+                            </span>
+                            {pr && <span className={board.rowPull} data-state={pr.checks} title={`#${pr.number} · ${pr.checks}`}>#{pr.number}</span>}
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
                 </li>
               );
             })}
@@ -630,12 +636,6 @@ export function Shell({
               </span>
             )}
             {usageLabel?.trim() && <span className="extendo-chrome-usage extendo-chrome-head-item extendo-chrome-mono extendo-chrome-ellipsis" title={usageLabel}>{usageLabel}</span>}
-            {thread && (
-              <span className="extendo-chrome-header-status" role="status" title={statusLabels[thread.status]}>
-                <StatusDot status={thread.status} />
-                <span>{statusLabels[thread.status]}</span>
-              </span>
-            )}
             <button
               className="extendo-chrome-icon-button extendo-chrome-rail-toggle"
               type="button"
