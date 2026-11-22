@@ -9,6 +9,7 @@ import { boardLabels } from '../console/board';
 import { humanizeTool } from '../chat/messages';
 import { PreviewPane } from '../console/preview';
 import { SubagentsPanel } from '../console/subagents';
+import board from '../console/console.module.css';
 import styles from './inspector.module.css';
 
 const DiffView = lazy(() => import('../chat/diff'));
@@ -334,7 +335,8 @@ export function Inspector({
         : name === 'Preview' ? <PreviewPane thread={thread} now={now} />
         : !thread ? <p className={styles.empty}>Open a thread to inspect its work.</p>
         : name === 'Overview' ? <>
-          <div className={styles.sessionState} data-status={status}><span aria-hidden="true" />
+          <div className={styles.sessionState}>
+            <span className={board.boardDot} data-state={thread.state} aria-hidden="true" />
             {thread.state ? boardLabels[thread.state] : statusLabel[status]}</div>
           <Section title="Plan" meta={data.plan.length ? `${formatNumber.format(data.plan.filter((item) => item.state === 'done').length)} of ${formatNumber.format(data.plan.length)}` : undefined}>
             {data.plan.length ? <ol className={styles.plan}>

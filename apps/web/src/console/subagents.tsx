@@ -113,12 +113,12 @@ function Approval({ subagent, onApproval }: {
       Wants to run {humanizeTool(request.call.name)}{target ? <> on <code dir="ltr" title={target}>{target}</code></> : null}
     </p>
     <div className={styles.approvalActions}>
-      <button type="button" className={styles.allowButton} disabled={state === 'busy'}
-        onClick={() => void answer('allow')}>Allow once</button>
       <button type="button" className={styles.quietButton} disabled={state === 'busy'}
-        onClick={() => void answer('always')}>Always</button>
+        onClick={() => void answer('always')} title="Always allow this exact action in this session">Always</button>
       <button type="button" className={styles.quietButton} disabled={state === 'busy'}
         onClick={() => void answer('deny')}>Deny</button>
+      <button type="button" className={styles.allowButton} disabled={state === 'busy'}
+        onClick={() => void answer('allow')}>Allow</button>
       {state === 'failed' && <span className={styles.error} role="alert">That approval is no longer pending.</span>}
     </div>
   </div>;

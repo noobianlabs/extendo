@@ -142,26 +142,6 @@
   font-size: 0.75rem;
 }
 
-.sessionState span {
-  flex: none;
-  inline-size: 6px;
-  block-size: 6px;
-  border-radius: 50%;
-  background: var(--muted-2);
-}
-
-.sessionState[data-status="working"] span {
-  background: var(--primary);
-}
-
-.sessionState[data-status="waiting"] span {
-  background: var(--warning);
-}
-
-.sessionState[data-status="failed"] span {
-  background: var(--destructive);
-}
-
 .section {
   padding: 14px 14px 12px;
 }

@@ -489,6 +489,7 @@
 }
 
 .extendo-chrome-thread-meta > span:first-child {
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -549,6 +550,16 @@
 .extendo-chrome-settings-leading {
   display: flex;
   flex: none;
+}
+
+.extendo-chrome-sidebar-footer .extendo-chrome-settings {
+  flex: 1 1 auto;
+  width: auto;
+}
+
+.extendo-chrome-sidebar-footer .extendo-chrome-picker {
+  flex: 0 0 auto;
+  max-inline-size: 62%;
 }
 
 .extendo-chrome-workspace {
