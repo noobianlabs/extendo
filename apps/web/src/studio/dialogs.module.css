@@ -1,0 +1,461 @@
+.modal {
+  position: fixed;
+  inset: 0;
+  inline-size: min(26rem, calc(100% - 28px));
+  max-inline-size: none;
+  max-block-size: calc(100dvh - 28px);
+  margin: auto;
+  padding: 0;
+  overflow: hidden;
+  border: 0.5px solid var(--border-3);
+  border-radius: var(--radius);
+  background: var(--popover);
+  color: var(--text);
+  font: 450 0.8125rem/1.5 var(--font-sans);
+}
+
+.modal[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+.modal::backdrop {
+  background: var(--overlay);
+}
+
+.modal svg {
+  flex: none;
+  stroke-width: 1.65;
+}
+
+.modal :is(button, input, select):focus-visible,
+.themeOption:has(:focus-visible) {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 9px;
+  min-block-size: 49px;
+  padding: 6px 10px 6px 16px;
+  border-block-end: 0.5px solid var(--border-2);
+}
+
+.header > svg,
+.search > svg {
+  color: var(--muted-1);
+}
+
+.header h2 {
+  flex: 1;
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.modal button {
+  font: inherit;
+  cursor: pointer;
+}
+
+.modal button:disabled,
+.modal button[aria-disabled="true"] {
+  opacity: 0.62;
+  cursor: default;
+}
+
+.close {
+  display: grid;
+  place-items: center;
+  min-inline-size: 30px;
+  min-block-size: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--muted-1);
+}
+
+.close:enabled:is(:hover, :active) {
+  background: var(--secondary);
+  color: var(--text);
+}
+
+.form {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-block-size: 0;
+}
+
+.formBody {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  min-block-size: 0;
+  overflow-y: auto;
+  padding: 15px 16px 17px;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+  min-inline-size: 0;
+}
+
+.field label,
+.appearance legend {
+  font-weight: 550;
+}
+
+.field input,
+.selectField select {
+  inline-size: 100%;
+  min-inline-size: 0;
+  min-block-size: 34px;
+  padding: 6px 9px;
+  border: 0.5px solid var(--border-3);
+  border-radius: var(--radius);
+  background: var(--input);
+  color: var(--text);
+  font: inherit;
+}
+
+.field input::placeholder,
+.search input::placeholder {
+  color: var(--muted-1);
+}
+
+.field .monoInput {
+  font: 450 0.75rem/1.5 var(--font-mono);
+}
+
+.selectField {
+  position: relative;
+  min-inline-size: 0;
+}
+
+.selectField select {
+  display: block;
+  appearance: none;
+  padding-inline-end: 30px;
+  text-overflow: ellipsis;
+}
+
+.selectField svg {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: 9px;
+  margin-block: auto;
+  color: var(--muted-1);
+  pointer-events: none;
+}
+
+.selectField select:disabled {
+  color: var(--muted-1);
+}
+
+.help,
+.error {
+  margin: 0;
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+}
+
+.help {
+  color: var(--muted-1);
+}
+
+.help code {
+  color: var(--text);
+  font: 450 0.6875rem/1.5 var(--font-mono);
+}
+
+.error {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  color: var(--destructive);
+}
+
+.error svg {
+  margin-block-start: 1px;
+}
+
+.appearance {
+  min-inline-size: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.appearance legend {
+  margin-block-end: 6px;
+  padding: 0;
+}
+
+.appearance > div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.themeOption {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-block-size: 34px;
+  padding: 6px 9px;
+  border: 0.5px solid var(--border-2);
+  border-radius: var(--radius);
+  color: var(--muted-1);
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.themeOption:has(:checked) {
+  border-color: var(--border-3);
+  background: var(--secondary);
+  color: var(--text);
+}
+
+.themeOption:hover,
+.themeOption:active {
+  background: var(--secondary);
+}
+
+.themeOption:has(:disabled) {
+  cursor: default;
+}
+
+.themeOption input,
+.visuallyHidden {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.formFoot {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 7px;
+  padding: 10px 16px;
+  border-block-start: 0.5px solid var(--border-2);
+  background: var(--section);
+}
+
+.formFoot button {
+  max-inline-size: 100%;
+  min-block-size: 32px;
+  padding: 5px 11px;
+  border-radius: var(--radius);
+  font-weight: 550;
+  overflow-wrap: anywhere;
+}
+
+.secondary {
+  border: 0.5px solid var(--border-2);
+  background: var(--button);
+  color: var(--text);
+}
+
+.secondary:enabled:is(:hover, :active) {
+  background: var(--button-hover);
+}
+
+.primary {
+  border: 0.5px solid var(--primary);
+  background: var(--primary);
+  color: var(--primary-text);
+}
+
+.primary:enabled:not([aria-disabled="true"]):is(:hover, :active) {
+  background: color-mix(in srgb, var(--primary) 88%, var(--primary-text));
+}
+
+.palette {
+  inset-block: min(14vh, 112px) auto;
+  inline-size: min(35rem, calc(100% - 28px));
+  max-block-size: min(28rem, calc(100dvh - min(14vh, 112px) - 14px));
+  margin-block: 0;
+}
+
+.search {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 9px;
+  min-block-size: 50px;
+  padding: 7px 12px;
+  border-block-end: 0.5px solid var(--border-2);
+}
+
+.search input {
+  flex: 1;
+  min-inline-size: 0;
+  padding: 6px 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.875rem;
+}
+
+.search:has(input:focus-visible) {
+  border-block-end-color: var(--ring);
+}
+
+.modal .esc,
+.paletteFoot kbd {
+  flex: none;
+  padding: 1px 5px;
+  border: 0.5px solid var(--border-2);
+  border-radius: var(--radius-sm);
+  background: var(--section);
+  color: var(--muted-1);
+  font: 450 0.625rem/1.6 var(--font-mono);
+}
+
+.modal .esc:hover,
+.modal .esc:active {
+  background: var(--secondary);
+  color: var(--text);
+}
+
+.paletteScroll {
+  min-block-size: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.group {
+  padding: 6px;
+}
+
+.group + .group {
+  border-block-start: 0.5px solid var(--border-1);
+}
+
+.groupTitle,
+.resultLimit {
+  padding: 4px 8px;
+  color: var(--muted-1);
+  font-size: 0.6875rem;
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-block-size: 34px;
+  padding: 5px 8px;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.option[aria-selected="true"] {
+  background: var(--secondary);
+}
+
+.option > svg {
+  color: var(--muted-1);
+}
+
+.option[aria-selected="true"] > svg {
+  color: var(--text);
+}
+
+.optionText {
+  display: grid;
+  flex: 1;
+  min-inline-size: 0;
+}
+
+.optionText span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.optionText span:first-child {
+  font-weight: 550;
+}
+
+.optionText span:nth-child(2) {
+  color: var(--muted-1);
+  font-size: 0.75rem;
+}
+
+.optionText span[data-mono="true"],
+.shortcut {
+  font: 450 0.6875rem/1.5 var(--font-mono);
+}
+
+.shortcut {
+  flex: none;
+  max-inline-size: 30%;
+  overflow: hidden;
+  color: var(--muted-1);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.noResults {
+  margin: 0;
+  padding: 23px 14px;
+  color: var(--muted-1);
+  text-align: center;
+}
+
+.paletteFoot {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  min-block-size: 35px;
+  padding: 6px 12px;
+  border-block-start: 0.5px solid var(--border-2);
+  color: var(--muted-1);
+  font-size: 0.6875rem;
+}
+
+.paletteFoot span {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.paletteFoot kbd {
+  display: inline-grid;
+  min-inline-size: 16px;
+  min-block-size: 16px;
+  place-items: center;
+  padding: 0;
+}
+
+@media (pointer: coarse) {
+  .formFoot button,
+  .field input,
+  .selectField select,
+  .themeOption,
+  .option,
+  .close,
+  .modal .esc {
+    min-block-size: 40px;
+  }
+}

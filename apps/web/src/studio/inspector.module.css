@@ -1,0 +1,417 @@
+.inspector {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  inline-size: min(20rem, 100%);
+  block-size: 100%;
+  min-block-size: 0;
+  min-inline-size: 0;
+  border-inline-start: 0.5px solid var(--border-2);
+  background: var(--panel);
+  color: var(--text);
+  font: 450 0.8125rem/1.45 var(--font-sans);
+}
+
+:global(.extendo-chrome-rail-content) .inspector {
+  flex: 1;
+  inline-size: 100%;
+  border-inline-start: 0;
+}
+
+.inspector svg {
+  flex: none;
+  stroke-width: 1.65;
+}
+
+.inspector :is(button, [tabindex="0"]):focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+
+.header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  min-block-size: 44px;
+  padding-inline: 14px 9px;
+  border-block-end: 0.5px solid var(--border-1);
+}
+
+.header > svg,
+.close {
+  color: var(--muted-1);
+}
+
+.header h2 {
+  flex: 1;
+  margin: 0;
+  font-size: inherit;
+  font-weight: 600;
+}
+
+.close,
+.tabs button,
+.fileRow {
+  border: 0;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.close {
+  display: grid;
+  min-inline-size: 28px;
+  min-block-size: 28px;
+  place-items: center;
+  padding: 0;
+  border-radius: var(--radius);
+}
+
+.close:hover,
+.close:active,
+.fileRow:hover,
+.fileRow:active {
+  background: var(--secondary);
+  color: var(--text);
+}
+
+.tabs {
+  display: flex;
+  flex: none;
+  gap: 12px;
+  padding-inline: 13px;
+  border-block-end: 0.5px solid var(--border-2);
+  overflow-x: auto;
+}
+
+.tabs button {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  min-block-size: 37px;
+  padding-inline: 2px;
+  border-block-end: 2px solid transparent;
+  color: var(--muted-1);
+  font-size: 0.75rem;
+  font-weight: 550;
+  white-space: nowrap;
+}
+
+.tabs button:hover {
+  color: var(--text);
+}
+
+.tabs button[aria-selected="true"] {
+  border-block-end-color: var(--primary);
+  color: var(--text);
+}
+
+.tabs button span {
+  min-inline-size: 16px;
+  padding-inline: 4px;
+  border-radius: var(--radius-sm);
+  background: var(--secondary);
+  color: var(--muted-1);
+  text-align: center;
+  font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.panel {
+  flex: 1;
+  min-block-size: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.sessionState {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 11px 14px;
+  border-block-end: 0.5px solid var(--border-1);
+  background: var(--section);
+  color: var(--muted-1);
+  font-size: 0.75rem;
+}
+
+.sessionState span {
+  flex: none;
+  inline-size: 6px;
+  block-size: 6px;
+  border-radius: 50%;
+  background: var(--muted-2);
+}
+
+.sessionState[data-status="working"] span {
+  background: var(--primary);
+}
+
+.sessionState[data-status="waiting"] span {
+  background: var(--warning);
+}
+
+.sessionState[data-status="failed"] span {
+  background: var(--destructive);
+}
+
+.section {
+  padding: 14px 14px 12px;
+}
+
+.section + .section {
+  border-block-start: 0.5px solid var(--border-1);
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 8px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.sectionHeader span {
+  color: var(--muted-1);
+  font: 450 0.6875rem/1.4 var(--font-mono);
+  white-space: nowrap;
+}
+
+.empty {
+  margin: 14px;
+  color: var(--muted-1);
+  font-size: 0.75rem;
+}
+
+.section .empty {
+  margin: 0 0 2px;
+}
+
+.plan,
+.files,
+.activity {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.plan li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding-block: 4px;
+  overflow-wrap: anywhere;
+}
+
+.plan li span {
+  min-inline-size: 0;
+}
+
+.plan svg {
+  margin-block-start: 2px;
+}
+
+.panel svg[data-state="queued"] {
+  color: var(--muted-2);
+}
+
+.panel svg[data-state="done"] {
+  color: var(--success);
+}
+
+.panel svg[data-state="running"] {
+  color: var(--primary-ink);
+}
+
+.panel svg[data-state="failed"] {
+  color: var(--destructive);
+}
+
+.files {
+  margin-inline: -4px;
+}
+
+.fileRow {
+  display: flex;
+  align-items: center;
+  inline-size: 100%;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-block-size: 31px;
+  padding: 5px 4px;
+  border-radius: var(--radius);
+  color: var(--muted-1);
+  text-align: start;
+}
+
+.path {
+  display: flex;
+  flex: 1 1 6.5rem;
+  min-inline-size: 0;
+  align-items: baseline;
+  font: 450 0.6875rem/1.55 var(--font-mono);
+}
+
+.pathParent,
+.fileName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fileName {
+  flex: 0 0 auto;
+  max-inline-size: 100%;
+  color: var(--text);
+}
+
+.stats {
+  display: flex;
+  flex: none;
+  column-gap: 6px;
+  font: 450 0.6875rem/1.55 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.preview {
+  flex: none;
+  padding-inline: 4px;
+  border-radius: var(--radius-sm);
+  background: var(--secondary);
+  color: var(--muted-1);
+  font-size: 0.625rem;
+}
+
+.addition {
+  color: var(--success);
+}
+
+.deletion {
+  color: var(--destructive);
+}
+
+.fileRow[aria-expanded="true"] .chevron {
+  transform: rotate(90deg);
+}
+
+.activity li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 8px;
+  padding-block: 5px;
+}
+
+.activityIcon {
+  display: grid;
+  inline-size: 24px;
+  block-size: 24px;
+  place-items: center;
+  border: 0.5px solid var(--border-2);
+  border-radius: var(--radius);
+  background: var(--section);
+  color: var(--muted-1);
+}
+
+.activity li > svg {
+  align-self: center;
+}
+
+.activityTitle {
+  overflow-wrap: anywhere;
+  font-size: 0.75rem;
+  font-weight: 550;
+}
+
+.activity code {
+  display: block;
+  overflow: hidden;
+  color: var(--muted-1);
+  font: 450 0.6875rem/1.5 var(--font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.diff {
+  margin: 2px 4px 8px;
+  overflow: hidden;
+  border: 0.5px solid var(--border-2);
+  border-radius: var(--radius);
+  background: var(--card);
+}
+
+.diff p {
+  margin: 0;
+  padding: 7px 8px;
+  color: var(--muted-1);
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+}
+
+.terminalList {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+}
+
+.terminalCard {
+  min-inline-size: 0;
+  overflow: hidden;
+  border: 0.5px solid var(--border-2);
+  border-radius: var(--radius);
+  background: var(--card);
+  font: 450 0.6875rem/1.55 var(--font-mono);
+}
+
+.terminalCommand {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 7px;
+  padding: 8px;
+}
+
+.terminalCommand code {
+  overflow-wrap: anywhere;
+  font: inherit;
+  white-space: pre-wrap;
+}
+
+.prompt,
+.terminalFoot {
+  color: var(--muted-1);
+}
+
+.terminalCard pre,
+.terminalFoot {
+  margin: 0;
+  padding: 7px 8px;
+  border-block-start: 0.5px solid var(--border-1);
+  background: var(--bg);
+}
+
+.terminalCard pre {
+  max-block-size: 21rem;
+  overflow: auto;
+  color: var(--muted-1);
+  font: inherit;
+  tab-size: 2;
+}
+
+.terminalFoot {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 9px;
+}
+
+@media (pointer: coarse) {
+  .close,
+  .tabs button,
+  .fileRow {
+    min-block-size: 40px;
+  }
+}

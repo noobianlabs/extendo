@@ -89,7 +89,7 @@ async function main() {
     return;
   }
   if (!args.length || !args.join(' ').trim()) throw new Error('Pass a task to extendo headless');
-  const runtime = await createRuntime({ mode, dataDir, cwd, plugins, profile });
+  const runtime = await createRuntime({ mode, dataDir, plugins, profile });
   try {
     const defaults = runtime.workspace.settings();
     const provider = values.provider ?? defaults.provider;

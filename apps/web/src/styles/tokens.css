@@ -1,0 +1,95 @@
+/* Capy artifact base. Lift this whole block into the file's one <style> (scripts/inline.mjs does it), then the skill's own stylesheet under it.
+   Colors resolve in this order: the viewer's Capy theme (the app injects --capy-* on :root and stamps data-theme), then Capy's default palette through light-dark().
+   Values follow packages/web/src/styles/design-tokens.css; the CSS there wins on any drift. */
+
+:root {
+  color-scheme: light dark;
+
+  --bg: var(--capy-bg, light-dark(#f2f2f4, #09090a));
+  --panel: var(--capy-panel, light-dark(#fafafb, #121213));
+  --card: var(--capy-card, light-dark(#ffffff, #1a1a1b));
+  --card-hover: var(--capy-card-hover, light-dark(#f7f7f8, #1f1f20));
+  --popover: var(--capy-popover, light-dark(#ffffff, #222223));
+  --secondary: var(--capy-secondary, light-dark(rgba(0, 0, 0, 0.05), rgba(255, 255, 255, 0.08)));
+  --section: var(--capy-section, light-dark(rgba(0, 0, 0, 0.035), rgba(255, 255, 255, 0.035)));
+  --popover-hover: light-dark(rgba(0, 0, 0, 0.04), rgba(255, 255, 255, 0.065));
+  --input: var(--capy-input, var(--card));
+  --button: var(--capy-button, light-dark(#ffffff, rgba(255, 255, 255, 0.07)));
+  --button-hover: var(--capy-button-hover, light-dark(#f7f7f8, rgba(255, 255, 255, 0.1)));
+  --fill-strong: light-dark(#e1e1e3, #353537);
+  --overlay: light-dark(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.55));
+
+  --text: var(--capy-text, light-dark(#1e1e20, #ebebec));
+  --muted-1: var(--capy-muted-foreground-1, light-dark(#6a6a6f, #a3a3a6));
+  --muted-2: var(--capy-muted-foreground-2, light-dark(#8a8a8e, #7f7f82));
+  --muted-3: var(--capy-muted-foreground-3, light-dark(#a9a9ad, #5d5d60));
+  --icon-muted: var(--capy-icon-muted, light-dark(#8d8d91, #5f5f62));
+
+  --border-1: var(--capy-border-1, light-dark(rgba(0, 0, 0, 0.08), rgba(255, 255, 255, 0.08)));
+  --border-2: var(--capy-border-2, light-dark(rgba(0, 0, 0, 0.11), rgba(255, 255, 255, 0.12)));
+  --border-3: var(--capy-border-3, light-dark(rgba(0, 0, 0, 0.15), rgba(255, 255, 255, 0.16)));
+
+  --primary: var(--capy-primary, light-dark(#3b5de8, #456af6));
+  --primary-ink: var(--capy-primary-ink, light-dark(#3550d6, #7699fb));
+  --primary-text: var(--capy-primary-text, #ffffff);
+  --primary-soft: color-mix(in srgb, var(--primary) 10%, transparent);
+  --ring: var(--primary);
+  --destructive: var(--capy-destructive, light-dark(#c7332f, #e5534b));
+  --success: var(--capy-success, light-dark(#1f9d3a, #3fb950));
+  --warning: var(--capy-warning-fg, light-dark(#a87f09, #e8c547));
+  --warning-fg: var(--warning);
+  --destructive-soft: color-mix(in srgb, var(--destructive) 18%, transparent);
+  --info: var(--capy-info, light-dark(#0b7fe0, #4aa3f5));
+
+  --chart-1: var(--capy-chart-1, var(--primary));
+  --chart-2: var(--capy-chart-2, light-dark(#d2d2d6, #3c3c40));
+  --chart-grid: var(--border-1);
+
+  --sh-plate: 0 1px 2px light-dark(rgba(0, 0, 0, 0.05), rgba(0, 0, 0, 0.3));
+  --sh-card:
+    0 0 0 0.5px light-dark(rgba(0, 0, 0, 0.1), rgba(255, 255, 255, 0.07)),
+    0 1px 2px light-dark(rgba(0, 0, 0, 0.04), rgba(0, 0, 0, 0.3));
+  --sh-overlay:
+    0 0 0 0.5px var(--border-2), 0 8px 24px light-dark(rgba(0, 0, 0, 0.08), rgba(0, 0, 0, 0.5));
+
+  --radius-sm: 4px;
+  --radius: 6px;
+  --radius-card: 12px;
+  --radius-panel: 12px;
+
+  --font-sans:
+    Inter, "Inter Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial,
+    sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --ease-out-quint: cubic-bezier(0.23, 1, 0.32, 1);
+  --duration-fast: 150ms;
+  --duration-base: 200ms;
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+html {
+  background: var(--bg);
+  -webkit-text-size-adjust: 100%;
+}
+body {
+  margin: 0;
+  color: var(--text);
+  background: var(--bg);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.6;
+  font-weight: 450;
+  font-feature-settings: "cv01", "cv05", "cv08", "ss03";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
