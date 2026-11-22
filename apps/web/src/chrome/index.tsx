@@ -9,7 +9,6 @@ import {
 } from 'react';
 import type { Project, Thread } from '@extendo/contracts';
 import { boardLabels, elapsed, groupBoard, threadState, threadSummary } from '../console/board';
-import { useNow } from '../console/useNow';
 import board from '../console/console.module.css';
 import './shell.css';
 
@@ -31,6 +30,7 @@ export interface ShellProps {
   thread?: Thread;
   providerLabel: string;
   loading: boolean;
+  now: number;
   rightOpen: boolean;
   onToggleRight: () => void;
   onSelectProject: (id: string) => void;
@@ -276,13 +276,14 @@ function ProjectPicker({
 }
 
 function ThreadList({
-  threads, project, activeId, loading, labels, onSelect, searchRef,
+  threads, project, activeId, loading, labels, now, onSelect, searchRef,
 }: {
   threads: Thread[];
   project?: Project;
   activeId?: string;
   loading: boolean;
   labels: ShellLabels;
+  now: number;
   onSelect: (id: string) => void;
   searchRef: RefObject<HTMLInputElement | null>;
 }) {
@@ -308,7 +309,6 @@ function ThreadList({
   const start = page * pageSize;
   const visible = filtered.slice(start, start + pageSize);
   const tabId = [focusedId, activeId].find(id => visible.some(({ item }) => item.id === id)) ?? visible[0]?.item.id;
-  const now = useNow(30_000);
 
   function getRows() {
     return Array.from(listRef.current?.querySelectorAll<HTMLButtonElement>('[data-thread-row]') ?? []);
@@ -460,7 +460,7 @@ function ThreadList({
 }
 
 export function Shell({
-  projects, threads, projectId, thread, providerLabel, loading, rightOpen, onToggleRight,
+  projects, threads, projectId, thread, providerLabel, loading, now, rightOpen, onToggleRight,
   onSelectProject, onSelectThread, onNewThread, onOpenProject, onOpenPalette, onOpenSettings,
   children, rail, labels: overrides, usageLabel,
 }: ShellProps) {
@@ -583,6 +583,7 @@ export function Shell({
           activeId={thread?.id}
           loading={loading}
           labels={labels}
+          now={now}
           searchRef={searchRef}
           onSelect={id => { closeNav(); onSelectThread(id); }}
         />

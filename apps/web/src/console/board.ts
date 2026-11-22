@@ -68,12 +68,12 @@ export function threadSummary(thread: Thread): string | undefined {
   if (swarm.length) {
     const counts = subagentCounts(swarm);
     const parts = [
-      counts.running ? `${counts.running} running` : undefined,
       counts.waiting ? `${counts.waiting} waiting` : undefined,
+      counts.running ? `${counts.running} running` : undefined,
       counts.queued ? `${counts.queued} queued` : undefined,
       counts.failed ? `${counts.failed} failed` : undefined,
       counts.done ? `${counts.done} done` : undefined,
-    ].filter(Boolean);
+    ].filter(Boolean).slice(0, 2);
     return `${number.format(swarm.length)} subagent${swarm.length === 1 ? '' : 's'}${parts.length ? ` · ${parts.join(' · ')}` : ''}`;
   }
   const pr = thread.pullRequest;

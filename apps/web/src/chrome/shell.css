@@ -481,9 +481,22 @@
   align-items: baseline;
   min-width: 0;
   gap: 5px;
+  overflow: hidden;
   color: var(--muted-1, #a3a3a6);
   font-size: 0.75rem;
   line-height: 1.35;
+  white-space: nowrap;
+}
+
+.extendo-chrome-thread-meta > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.extendo-chrome-thread-meta > span,
+.extendo-chrome-thread-meta > time {
+  flex: none;
 }
 
 .extendo-chrome-thread-meta time {

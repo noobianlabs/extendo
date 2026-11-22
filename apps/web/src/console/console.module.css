@@ -5,6 +5,8 @@
 
 .boardHeading {
   display: flex;
+  flex-wrap: nowrap;
+  white-space: nowrap;
   align-items: center;
   gap: 6px;
   margin: 0;
@@ -18,7 +20,7 @@
 
 .boardHeading::after {
   content: "";
-  flex: 1;
+  flex: 1 1 8px;
   height: 0.5px;
   background: var(--border-1);
 }
@@ -124,6 +126,10 @@
   background: var(--panel);
 }
 
+.pull svg {
+  flex: none;
+}
+
 .pullNumber {
   flex: none;
   font-family: var(--font-mono);
@@ -134,15 +140,23 @@
 .pullTitle {
   min-width: 0;
   overflow: hidden;
+  color: var(--text);
   font-size: 0.75rem;
+  text-decoration: none;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.pullTitle:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .pullMeta {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  white-space: nowrap;
   flex: none;
   font-size: 0.6875rem;
   color: var(--muted-2);
@@ -171,6 +185,11 @@
   font: inherit;
   font-size: 0.6875rem;
   cursor: pointer;
+}
+
+.quietButton,
+a.quietButton {
+  text-decoration: none;
 }
 
 .quietButton:hover { background: var(--secondary); }
@@ -235,7 +254,7 @@
   flex: none;
   font-family: var(--font-mono);
   font-size: 0.625rem;
-  color: var(--muted-3);
+  color: var(--muted-2);
 }
 
 .duration {
@@ -277,6 +296,7 @@
 
 .report, .error {
   margin: 2px 0 0;
+  padding-left: 19px;
   font-size: 0.6875rem;
   line-height: 1.45;
   color: var(--muted-1);
@@ -334,6 +354,8 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: nowrap;
+  white-space: nowrap;
   padding: 8px 12px;
   border-bottom: 0.5px solid var(--border-1);
   font-size: 0.6875rem;
@@ -416,6 +438,40 @@
   align-items: center;
 }
 
+.approvalActions .quietButton,
+.allowButton {
+  height: 24px;
+}
+
+.allowButton {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 9px;
+  border: 0.5px solid var(--primary);
+  border-radius: 5px;
+  background: var(--card);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.6875rem;
+  font-weight: 550;
+  cursor: pointer;
+}
+
+.allowButton:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+}
+
+.stateMark {
+  flex: none;
+  color: var(--muted-2);
+}
+
+.stateMark[data-state="done"] { color: var(--muted-1); }
+.stateMark[data-state="waiting-approval"] { color: var(--primary); }
+.stateMark[data-state="failed"] { color: var(--destructive); }
+
 .banner {
   display: flex;
   align-items: center;
@@ -434,4 +490,17 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+
+@media (max-width: 720px) {
+  .pull {
+    flex-wrap: wrap;
+    row-gap: 4px;
+  }
+
+  .pullTitle {
+    order: 3;
+    flex-basis: 100%;
+  }
 }

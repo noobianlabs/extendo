@@ -13,6 +13,8 @@ export function PreviewPane({ thread, now }: { thread?: Thread; now: number }) {
     No preview for this branch yet. A thread with a branch and a rendered page shows it here once it exists.
   </p>;
   const updated = relativeTime(preview.updatedAt, now);
+  const theme = document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
+  const src = `${preview.url}${preview.url.includes('?') ? '&' : '?'}theme=${theme}`;
   return <div className={styles.previewBody}>
     <div className={styles.previewMeta}>
       <span>{preview.label ?? 'Preview'}</span>
@@ -26,7 +28,7 @@ export function PreviewPane({ thread, now }: { thread?: Thread; now: number }) {
       </a>
     </div>
     <div className={styles.frameWrap}>
-      <iframe key={`${preview.url}-${nonce}`} className={styles.frame} src={preview.url} title={`${preview.title} preview`}
+      <iframe key={`${src}-${nonce}`} className={styles.frame} src={src} title={`${preview.title} preview`}
         sandbox="allow-scripts allow-same-origin" loading="lazy" />
     </div>
   </div>;

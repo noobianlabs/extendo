@@ -20,15 +20,16 @@ function duration(subagent: Subagent, now: number) {
   if (!Number.isFinite(start)) return;
   const end = subagent.endedAt ? new Date(subagent.endedAt).getTime() : now;
   const seconds = Math.max(0, (end - start) / 1000);
-  if (seconds < 0.1) return;
-  return seconds < 10 ? `${seconds.toFixed(1)}s` : `${Math.round(seconds)}s`;
+  const total = seconds >= 0.1 ? seconds
+    : subagent.activity.reduce((sum, activity) => sum + (activity.durationMs ?? 0), 0) / 1000;
+  if (total < 0.1) return;
+  return total < 10 ? `${total.toFixed(1)}s` : `${Math.round(total)}s`;
 }
 
 function StateMark({ state }: { state: SubagentState }) {
   const Icon = state === 'done' ? CircleCheck : state === 'failed' ? CircleX
-    : state === 'queued' || state === 'stopped' ? CircleDashed
     : state === 'waiting-approval' ? Clock3 : CircleDashed;
-  return <Icon size={12} data-state={state} className={styles.stateDot} aria-hidden="true" />;
+  return <Icon size={13} data-state={state} className={styles.stateMark} aria-hidden="true" />;
 }
 
 function ActivityLine({ activity }: { activity: SubagentActivity }) {
@@ -109,7 +110,7 @@ function Approval({ subagent, onApproval }: {
       Wants to run <code>{request.call.name}</code>{target ? <> on <code dir="ltr" title={target}>{target}</code></> : null}
     </p>
     <div className={styles.approvalActions}>
-      <button type="button" className={styles.quietButton} disabled={state === 'busy'}
+      <button type="button" className={styles.allowButton} disabled={state === 'busy'}
         onClick={() => void answer('allow')}>Allow once</button>
       <button type="button" className={styles.quietButton} disabled={state === 'busy'}
         onClick={() => void answer('always')}>Always</button>

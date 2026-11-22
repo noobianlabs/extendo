@@ -38,7 +38,7 @@ function escape(value: string): string {
  * A real page, not a screenshot: the demo workspace's search results with the empty state the
  * thread's branch currently produces. It is what the preview tab iframes.
  */
-export function renderPreview(thread: ThreadRow, events: readonly SessionEvent[]): string {
+export function renderPreview(thread: ThreadRow, events: readonly SessionEvent[], theme?: 'light' | 'dark'): string {
   const fixed = patched(events);
   const empty = fixed
     ? `<div class="empty" role="status">
@@ -50,27 +50,39 @@ export function renderPreview(thread: ThreadRow, events: readonly SessionEvent[]
         <h2>No results</h2>
       </div>`;
   return `<!doctype html>
-<html lang="en">
+<html lang="en"${theme ? ` data-theme="${theme}"` : ''}>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escape(thread.title)} — preview</title>
 <style>
-  :root { color-scheme: light; }
+  :root {
+    color-scheme: light dark;
+    --ink: light-dark(#17171a, #ebebec);
+    --page: light-dark(#f6f6f7, #121213);
+    --surface: light-dark(#ffffff, #1a1a1b);
+    --line: light-dark(#e2e2e5, rgba(255, 255, 255, 0.1));
+    --field: light-dark(#d9d9de, rgba(255, 255, 255, 0.14));
+    --quiet: light-dark(#5c5c66, #a3a3a6);
+    --faint: light-dark(#8a8a93, #7f7f82);
+    scrollbar-color: light-dark(#c9c9ce, #353537) transparent;
+  }
+  :root[data-theme="light"] { color-scheme: light; }
+  :root[data-theme="dark"] { color-scheme: dark; }
   * { box-sizing: border-box; }
-  body { margin: 0; font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; color: #17171a; background: #f6f6f7; }
-  header { display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-block-end: 1px solid #e2e2e5; background: #fff; }
+  body { margin: 0; font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--ink); background: var(--page); }
+  header { display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-block-end: 1px solid var(--line); background: var(--surface); }
   header .brand { font-weight: 620; letter-spacing: -0.01em; }
-  header .branch { margin-inline-start: auto; font: 12px/1.4 ui-monospace, SFMono-Regular, monospace; color: #6b6b73; }
+  header .branch { margin-inline-start: auto; font: 12px/1.4 ui-monospace, SFMono-Regular, monospace; color: var(--quiet); }
   main { max-width: 720px; margin: 40px auto; padding: 0 20px; }
   .search { display: flex; gap: 8px; margin-block-end: 28px; }
-  .search input { flex: 1; padding: 9px 12px; border: 1px solid #d9d9de; border-radius: 6px; background: #fff; font: inherit; }
-  .search button { padding: 9px 14px; border: 1px solid #d9d9de; border-radius: 6px; background: #fff; font: inherit; }
-  .empty { padding: 28px 24px; border: 1px solid #e2e2e5; border-radius: 8px; background: #fff; }
+  .search input { flex: 1; padding: 9px 12px; border: 1px solid var(--field); border-radius: 6px; background: var(--surface); color: inherit; font: inherit; }
+  .search button { padding: 9px 14px; border: 1px solid var(--field); border-radius: 6px; background: var(--surface); color: inherit; font: inherit; }
+  .empty { padding: 28px 24px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
   .empty h2 { margin: 0 0 8px; font-size: 16px; font-weight: 620; }
-  .empty p { margin: 0 0 16px; color: #5c5c66; }
-  .empty button { padding: 8px 14px; border: 1px solid #17171a; border-radius: 6px; background: #17171a; color: #fff; font: inherit; }
-  footer { max-width: 720px; margin: 32px auto 0; padding: 0 20px 40px; color: #8a8a93; font-size: 12px; }
+  .empty p { margin: 0 0 16px; color: var(--quiet); }
+  .empty button { padding: 8px 14px; border: 1px solid var(--ink); border-radius: 6px; background: var(--ink); color: light-dark(#ffffff, #121213); font: inherit; }
+  footer { max-width: 720px; margin: 32px auto 0; padding: 0 20px 40px; color: var(--faint); font-size: 12px; }
 </style>
 </head>
 <body>

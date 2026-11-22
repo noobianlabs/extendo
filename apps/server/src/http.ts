@@ -113,7 +113,10 @@ export function createHttpApp(runtime: Runtime, options: HttpOptions = {}): Hono
     const sessionId = c.req.param('sessionId');
     const thread = workspace.threadBySession(sessionId);
     if (!thread) return c.text('Unknown thread', 404);
-    return c.html(renderPreview(thread, sessions.replay(sessionId)));
+    c.header('X-Frame-Options', 'SAMEORIGIN');
+    c.header('Content-Security-Policy', "frame-ancestors 'self'");
+    const theme = c.req.query('theme');
+    return c.html(renderPreview(thread, sessions.replay(sessionId), theme === 'light' || theme === 'dark' ? theme : undefined));
   });
   app.all('/api/*', (c) => c.json({ error: 'Unknown API route' }, 404));
   if (options.webRoot) {

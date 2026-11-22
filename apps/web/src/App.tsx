@@ -210,7 +210,7 @@ export function App() {
 
   return <>
     <Shell projects={projects} threads={threads} projectId={project?.id} thread={thread} providerLabel={providerLabel}
-      loading={isLoading} rightOpen={inspector} onToggleRight={toggleInspector} usageLabel={thread ? usageLabel : undefined}
+      loading={isLoading} now={now} rightOpen={inspector} onToggleRight={toggleInspector} usageLabel={thread ? usageLabel : undefined}
       onSelectProject={(id) => { setActiveProject(id); setActiveThread(undefined); setForcedProvider(undefined); setNotice(undefined); }}
       onSelectThread={selectThread} onNewThread={() => { void createThread(); }} onOpenProject={() => setOpenProject(true)}
       onOpenPalette={() => setPalette(true)} onOpenSettings={() => setPreferences(true)} labels={fixture?.labels}

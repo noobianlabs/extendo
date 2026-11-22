@@ -5,6 +5,7 @@ import {
   FileSearch, FlaskConical, PanelRight, SquareTerminal, Wrench, X,
 } from 'lucide-react';
 import type { AgentStatus, ApprovalDecision, JsonValue, Message, Thread } from '@extendo/contracts';
+import { boardLabels } from '../console/board';
 import { PreviewPane } from '../console/preview';
 import { SubagentsPanel } from '../console/subagents';
 import styles from './inspector.module.css';
@@ -325,7 +326,8 @@ export function Inspector({
         : name === 'Preview' ? <PreviewPane thread={thread} now={now} />
         : !thread ? <p className={styles.empty}>Open a thread to inspect its work.</p>
         : name === 'Overview' ? <>
-          <div className={styles.sessionState} data-status={status}><span aria-hidden="true" />{statusLabel[status]}</div>
+          <div className={styles.sessionState} data-status={status}><span aria-hidden="true" />
+            {thread.state ? boardLabels[thread.state] : statusLabel[status]}</div>
           <Section title="Plan" meta={data.plan.length ? `${formatNumber.format(data.plan.filter((item) => item.state === 'done').length)} of ${formatNumber.format(data.plan.length)}` : undefined}>
             {data.plan.length ? <ol className={styles.plan}>
               {data.plan.map((item, index) => <li key={index}><StateIcon state={item.state} /><span dir="auto">{item.text}</span></li>)}
