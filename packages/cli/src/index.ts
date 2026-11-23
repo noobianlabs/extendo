@@ -4,15 +4,19 @@ import { realpathSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 import { parseArgs } from 'node:util';
 import { composeProfile, dumpConfig } from '@extendo/kernel';
-import { createRuntime, defaultDataDir, startServer, type RuntimeMode } from '@extendo/server';
+import { createRuntime, defaultDataDir, normalizeOrigin, startServer, type RuntimeMode } from '@extendo/server';
 import { addPlugin, extensionCatalog, loadProfile } from './profile.js';
 
 const usage = `Usage:
-  extendo web [--port 4310] [--no-open]
+  extendo web [--port 4310] [--no-open] [--allow-origin <origin>] [--trust-proxy]
   extendo headless "task" [--provider demo] [--model name] [--cwd path]
   extendo sdk
   extendo plugin add <package>
-  extendo --dump-config [--profile web|headless|sdk] [--patch file]`;
+  extendo --dump-config [--profile web|headless|sdk] [--patch file]
+
+Behind a reverse proxy or tunnel, pass --allow-origin for each public origin the browser
+uses, and --trust-proxy when the proxy rewrites the Host header. The same settings come
+from EXTENDO_ALLOWED_ORIGINS (comma-separated) and EXTENDO_TRUST_PROXY=1.`;
 
 function openBrowser(url: string) {
   const [command, ...args] = process.platform === 'darwin' ? ['open', url]
@@ -47,6 +51,8 @@ async function main() {
       version: { type: 'boolean', short: 'v' },
       'dump-config': { type: 'boolean' },
       'no-open': { type: 'boolean' },
+      'trust-proxy': { type: 'boolean' },
+      'allow-origin': { type: 'string', multiple: true },
       port: { type: 'string' },
       cwd: { type: 'string' },
       profile: { type: 'string' },
@@ -78,7 +84,14 @@ async function main() {
     if (args.length) throw new Error(usage);
     const port = Number(values.port ?? process.env.EXTENDO_PORT ?? 4310);
     if (!Number.isInteger(port) || port < 0 || port > 65_535) throw new Error('Invalid port');
-    const server = await startServer({ port, dataDir, cwd, plugins, profile });
+    for (const origin of values['allow-origin'] ?? []) {
+      if (!normalizeOrigin(origin)) throw new Error(`Invalid --allow-origin ${origin}: use an exact origin like https://extendo.example.com`);
+    }
+    const server = await startServer({
+      port, dataDir, cwd, plugins, profile,
+      allowedOrigins: values['allow-origin'],
+      trustProxy: values['trust-proxy'],
+    });
     console.log(`Extendo is listening at ${server.url}`);
     if (!values['no-open'] && process.env.EXTENDO_NO_OPEN !== '1') openBrowser(server.url);
     const shutdown = () => {
