@@ -393,6 +393,7 @@
 /* The capability strip sits above the composer and names the tools a plugin added. */
 .stripWrap {
   position: relative;
+  flex: none;
   inline-size: 100%;
   max-inline-size: var(--chat-width, 45rem);
   margin-inline: auto;
