@@ -161,6 +161,31 @@ async function worstCase(browser, url) {
   }
 }
 
+async function removeAll(browser, url) {
+  console.log('teardown: deleting every plugin');
+  const { context, page, problems } = await session(browser, {});
+  page.setDefaultTimeout(20_000);
+  await page.goto(url, { waitUntil: 'networkidle' });
+  await openWorkshop(page);
+  await page.getByTestId('plugin-editor').waitFor();
+  for (let attempt = 0; ; attempt++) {
+    const remove = page.getByRole('button', { name: /^Delete / });
+    if ((await remove.count()) === 0) break;
+    if (attempt > 20) throw new Error('Could not remove every plugin');
+    await remove.first().click();
+    await settle(page, 160);
+  }
+  await page.getByRole('button', { name: 'Write your first plugin' }).waitFor();
+  check(true, 'deleting every plugin returns the workshop to its empty state');
+  await page.getByTestId('open-tools').click();
+  await page.getByTestId('tool-list').waitFor();
+  const listed = await page.getByTestId('tool-list').innerText();
+  check(!/word_count/.test(listed), 'a deleted plugin takes its tool out of the agent’s tool list');
+  check(/demo_read/.test(listed), 'the built-in tools are still there after the plugins are gone');
+  check(problems.length === 0, 'no console errors while deleting');
+  await context.close();
+}
+
 async function main() {
   rmSync(outDir, { recursive: true, force: true });
   mkdirSync(outDir, { recursive: true });
@@ -216,6 +241,7 @@ async function main() {
     await phone.context.close();
     check(phone.problems.length === 0, 'no console errors at 390: ' + (phone.problems.join(' | ') || 'none'));
     await worstCase(browser, app.url);
+    await removeAll(browser, app.url);
   } catch (error) {
     failure = error;
     console.error(error);
