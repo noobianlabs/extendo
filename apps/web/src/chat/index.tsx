@@ -1,8 +1,7 @@
 import { ArrowDown, CircleAlert, Plug, Terminal } from 'lucide-react';
-import { Fragment, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { AgentStatus, ApprovalDecision, ApprovalRequest, LiveTool, Message, Subagent } from '@extendo/contracts';
 import { CapabilityStrip } from '../workshop';
-import { Seam } from '../workshop/seam';
 import { Composer } from './composer';
 import { AssistantStep, ToolCard } from './messages';
 import styles from './chat.module.css';
@@ -127,21 +126,22 @@ export function ChatSurface({
                   }
                   const joinedTool = message.tools.find(({ call }) => pluginTools?.get(call.name) === joined)?.call.name;
                   return (
-                    <Fragment key={message.id}>
-                      {joined && joinedTool && <Seam plugin={joined} tool={joinedTool} onOpen={onOpenWorkshop} />}
-                      <AssistantStep
-                        message={message}
-                        startsReply={startsReply}
-                        streaming={message === draft && status === 'working' && !approvals.length}
-                        active={running && message.turnId === latestTurn}
-                        approvalByCall={messageApprovals}
-                        onApproval={onApproval}
-                        connected={connected}
-                        subagents={subagents}
-                        onOpenSubagents={onOpenSubagents}
-                        onSubagentApproval={onSubagentApproval}
-                      />
-                    </Fragment>
+                    <AssistantStep
+                      key={message.id}
+                      message={message}
+                      startsReply={startsReply}
+                      streaming={message === draft && status === 'working' && !approvals.length}
+                      active={running && message.turnId === latestTurn}
+                      approvalByCall={messageApprovals}
+                      onApproval={onApproval}
+                      connected={connected}
+                      subagents={subagents}
+                      onOpenSubagents={onOpenSubagents}
+                      onSubagentApproval={onSubagentApproval}
+                      seam={joined && joinedTool ? { plugin: joined, tool: joinedTool } : undefined}
+                      pluginTools={pluginTools}
+                      onOpenPlugin={onOpenWorkshop}
+                    />
                   );
                 })}
                 {approvals.filter(request => !attachedApprovals.has(request.requestId)).map(request => (

@@ -23,6 +23,7 @@ export interface WorkshopProps {
 }
 
 const clock = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+const accelerator = typeof navigator !== 'undefined' && /mac|iphone|ipad/i.test(navigator.platform ?? '') ? '⌘S' : 'Ctrl S';
 
 function mountedAt(extension: Extension): string {
   if (!extension.mountedAt) return 'not loaded';
@@ -201,16 +202,16 @@ export function Workshop({ open, state, tools, selected, onSelect, onCreate, onS
             </span>
           </div>
           <div className={styles.actions}>
-            {status === 'saved' && <span key={sweep} className={styles.saved} data-testid="saved">mounted</span>}
+            {status === 'saved' && <span key={sweep} className={styles.saved} data-testid="saved">saved</span>}
             {status === 'saving' && <span className={styles.saved}>saving…</span>}
             <button type="button" className={styles.danger} onClick={() => { void remove(); }} disabled={busy}
               aria-label={`Delete ${current?.name ?? 'plugin'}`}>
               <Trash2 size={13} aria-hidden="true" />
             </button>
-            <button type="button" className={styles.save} onClick={() => { void save(); }} disabled={busy || !current}
+            <button type="button" className={styles.save} onClick={() => { void save(); }} disabled={busy || !current || !dirty}
               data-testid="save-plugin">
-              {dirty ? 'Save' : 'Saved'}
-              <kbd className={styles.kbd}>⌘S</kbd>
+              Save
+              <kbd className={styles.kbd}>{accelerator}</kbd>
             </button>
           </div>
         </footer>
@@ -258,13 +259,13 @@ export function CapabilityStrip({ tools, onOpen, plugins }: { tools: LiveTool[];
           <CircleDot size={11} aria-hidden="true" />
           <span className={styles.stripLabel}>tools</span>
         </button>
+        <span className={styles.stripCount}>{builtin} built in</span>
         {authored.length === 0
           ? <span className={styles.stripMuted}>{plugins === 0 ? 'no plugins yet' : 'no plugin tools loaded'}</span>
           : authored.map(({ name, extensionId }) => <button key={name} type="button" className={styles.chip}
             onClick={onOpen} title={`Provided by ${extensionId}`} data-testid={'live-tool-' + name}>
             {name}
           </button>)}
-        <span className={styles.stripCount}>{builtin} built in</span>
       </div>
       {list && (
         <div className={styles.toolList} role="dialog" aria-label="Tools the agent can use" data-testid="tool-list">
@@ -273,7 +274,7 @@ export function CapabilityStrip({ tools, onOpen, plugins }: { tools: LiveTool[];
             <span className={styles.toolListCount}>{tools.length}</span>
           </p>
           <ul className={styles.toolListBody}>
-            {tools.map((tool) => <li key={tool.name} className={styles.toolRow}>
+            {[...tools].sort((left, right) => Number(Boolean(right.extensionId)) - Number(Boolean(left.extensionId))).map((tool) => <li key={tool.name} className={styles.toolRow}>
               <code className={tool.extensionId ? styles.toolOwned : styles.toolBuiltin}>{tool.name}</code>
               <span className={styles.toolWhere}>{tool.extensionId ? 'plugin/' + tool.extensionId : 'built in'}</span>
               <span className={styles.toolDescription}>{tool.description}</span>

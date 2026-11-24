@@ -30,15 +30,30 @@ function check(condition, message) {
 
 /** Layout invariants a screenshot would show but a headless run can prove. */
 async function layout(page, label) {
-  const overflow = await page.evaluate(() => ({
-    width: document.documentElement.scrollWidth,
-    viewport: window.innerWidth,
-  }));
+  const overflow = await page.evaluate(() => ({ width: document.documentElement.scrollWidth, viewport: window.innerWidth }));
   check(overflow.width <= overflow.viewport + 1, `${label}: nothing overflows the viewport horizontally`);
-  const clipped = await page.evaluate(() => Array.from(document.querySelectorAll('[data-testid="workshop"] *, main *'))
-    .filter((node) => node.scrollWidth > node.clientWidth + 2 && getComputedStyle(node).overflowX === 'visible' && node.clientWidth > 0)
+  const clipped = await page.evaluate(() => Array.from(document.querySelectorAll('body *'))
+    .filter((node) => {
+      const style = getComputedStyle(node);
+      return node.clientWidth > 0 && node.scrollWidth > node.clientWidth + 2 && style.overflowX === 'visible';
+    })
     .map((node) => (node.className || node.tagName).toString().slice(0, 60)));
-  check(clipped.length === 0, `${label}: no clipped text` + (clipped.length ? ': ' + clipped.join(', ') : ''));
+  check(clipped.length === 0, `${label}: no clipped text anywhere` + (clipped.length ? ': ' + clipped.join(', ') : ''));
+}
+
+/** The panel is a sibling of the header, not a cover over it. */
+async function doesNotCoverChrome(page) {
+  const header = await page.locator('header').first().boundingBox();
+  const panel = await page.getByTestId('workshop').boundingBox();
+  check(Boolean(header && panel) && panel.y >= header.y + header.height - 1, 'the workshop starts below the header');
+  const occluded = await page.evaluate(() => {
+    const button = document.querySelector('[data-testid="open-workshop"]');
+    if (!button) return 'missing';
+    const box = button.getBoundingClientRect();
+    const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
+    return hit === button || button.contains(hit) ? null : String(hit?.className ?? hit?.tagName ?? 'unknown');
+  });
+  check(occluded === null, 'the workshop toggle stays clickable while the workshop is open' + (occluded ? ': ' + occluded : ''));
 }
 
 async function sideBySide(page) {
@@ -75,13 +90,14 @@ async function runFlow(page, url, { capture }) {
   await page.getByTestId('plugin-editor').waitFor();
   await settle(page, 420);
   await beat(900);
+  await doesNotCoverChrome(page);
   if (capture) await shot(page, '02-editor');
 
   const editor = page.getByTestId('plugin-editor');
   await editor.click();
   await page.keyboard.press('ControlOrMeta+a');
   await beat(300);
-  await page.keyboard.type(SOURCE, { delay: capture ? 4 : 1 });
+  await page.keyboard.insertText(SOURCE);
   await beat(500);
   await page.keyboard.press('ControlOrMeta+s');
   await page.getByTestId('saved').waitFor();
@@ -89,6 +105,8 @@ async function runFlow(page, url, { capture }) {
   await beat(900);
   const revision = await page.locator('[data-testid="workshop"]').innerText();
   check(/revision\s*2/i.test(revision), 'the save wrote revision 2 and remounted it');
+  const stored = await (await fetch(new URL('/api/extensions', page.url()).href)).json();
+  check(stored.extensions[0]?.source === SOURCE, 'the editor round-tripped the source exactly, with no auto-indent drift');
   check((await page.getByTestId('live-tool-word_count').count()) === 1, 'the plugin tool appears in the capability strip');
   if (capture) await shot(page, '03-saved');
 
@@ -98,6 +116,8 @@ async function runFlow(page, url, { capture }) {
   await page.getByTestId('plugin-seam').waitFor({ timeout: 25_000 });
   await page.getByText(/word_count answered/).waitFor({ timeout: 25_000 });
   await settle(page, 500);
+  const answer = await page.getByRole('region', { name: 'Message history' }).innerText();
+  check(answer.includes('{"words":'), 'the tool result reaches the transcript intact, opening brace and all');
   check((await page.getByTestId('plugin-seam').count()) === 1, 'the seam marks where the plugin joined this thread');
   check(/plugin\/word-count joined/.test(await page.getByTestId('plugin-seam').innerText()), 'the seam names the plugin that joined');
   const call = await page.getByText('word_count', { exact: false }).count();

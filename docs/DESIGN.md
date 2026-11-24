@@ -34,7 +34,8 @@ used for exactly four things, and nothing else in the product may use it:
 | Focus ring | `--accent` | The keyboard is the primary input; the ring is where the substrate answers. |
 | Plugin seams and plugin-provided tools | `--accent` | The seam is the product's signature. |
 | Live/waiting-on-you status | `--accent` | The one thing that wants a person. |
-| The single solid button per surface | `--accent-fill` | One filled control per screen, never two. |
+| Keywords in the workshop editor | `--accent` | The editor is where a join is written; the only coloured token in a plugin. |
+| The single solid button per surface | `--accent-fill` | One filled control per screen, never two. The sidebar's New thread is that control whenever it is on screen, so a panel's primary action is an accent hairline instead. |
 
 Everything else is a neutral ramp, stepping lighter with elevation in dark mode and darker in light
 mode. Failure gets a desaturated red as a 6px dot and a hairline, never as a fill. Success gets a dot
@@ -52,8 +53,9 @@ size. Nothing in the product uses a size outside this scale.
 
 | Token | Size / line-height | Tracking | Weight | Use |
 | --- | --- | --- | --- | --- |
-| `--type-micro` | 11 / 14 | +0.06em, uppercase | 560 | Mono capability labels, seam labels, column headings |
+| `--type-micro` | 11 / 14 | +0.06em, uppercase | 560 | Mono capability labels and column headings |
 | `--type-caption` | 12 / 16 | -0.005em | 450 | Secondary rows, timings, hints |
+| `--type-mono` | 12 / 16 | 0 | 450 | Identifiers and measured values that are read as a sentence, such as the seam label and the tool name in a plugin's tool row |
 | `--type-body` | 13 / 20 | -0.008em | 450 | Prose, controls, list rows |
 | `--type-lead` | 15 / 22 | -0.012em | 460 | Composer input, message lead-ins |
 | `--type-title` | 19 / 25 | -0.018em | 560 | Thread title, panel titles, empty-state headings |
@@ -74,7 +76,9 @@ Rules:
 - Every control scales to `0.97` on `:active` in 100ms and returns in 120ms. Nothing responds only on
   release.
 - The seam draws left to right with `clip-path: inset(0 100% 0 0)` → `inset(0)` over 260ms, then its
-  label fades in 60ms later. It is a transition, not a keyframe, so a second save retargets it.
+  label fades in 60ms later. It is a transition under `@starting-style`, not a keyframe, so a second
+  save retargets it. Its label is mono sentence case, not the uppercase micro step: it carries a
+  plugin id, and uppercasing an identifier misrepresents it.
 - Popovers scale from their trigger: set `--popover-origin` from the trigger's rect before opening and
   use `transform-origin: var(--popover-origin)`. Modals stay centred.
 - Exit is faster than enter (enter 260ms, exit 180ms).

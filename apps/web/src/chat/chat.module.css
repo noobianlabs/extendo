@@ -407,6 +407,21 @@
 }
 
 .chat summary { list-style: none; }
+
+.chat :is(.send, .stop, .iconButton, .provider, .quietButton, .primaryButton, .toolSummary):active:not(:disabled) {
+  transform: scale(var(--press-scale));
+  transition-duration: var(--dur-press);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat :is(.send, .stop, .iconButton, .provider, .quietButton, .primaryButton, .toolSummary):active {
+    transform: none;
+  }
+  .disclosure,
+  .chat summary svg {
+    transition: none;
+  }
+}
 .chat summary::-webkit-details-marker { display: none; }
 
 .chat summary svg,
@@ -467,6 +482,15 @@
 
 .tool:has(.toolStatus[data-status='Failed'])::before {
   box-shadow: inset 0 0 0 1px var(--destructive);
+}
+
+/* A tool the person wrote: the notch and its tick take the accent, so the row is marked as a join. */
+.tool[data-plugin]::before {
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.tool[data-plugin]::after {
+  background: var(--accent-line);
 }
 
 .tool:has(.toolStatus[data-status='No result'])::before {

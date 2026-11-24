@@ -186,7 +186,7 @@ function pluginScript(tools: readonly ModelTool[], messages: ModelRequest['messa
         call: { name: tool.name, input: synthesizeInput(tool.inputSchema) },
       },
       {
-        text: `${tool.name} answered ${answer}. That tool did not exist in Extendo when this thread started: the plugin you saved mounted into the running kernel, and the model was offered it on this request.`,
+        text: `\`${tool.name}\` answered \`${answer}\`. That tool did not exist in Extendo when this thread started: the plugin you saved mounted into the running kernel, and the model was offered it on this request.`,
       },
     ],
   };
@@ -219,6 +219,25 @@ function steer(messages: ModelRequest['messages'], firstIndex: number): string |
   return last.content;
 }
 
+/**
+ * Splits streamed text at word boundaries without ever dropping a character. A regex like
+ * `/.{1,48}(\s|$)/g` looks equivalent but skips any run longer than the window, which silently ate
+ * the first characters of a tool's JSON payload.
+ */
+export function fragment(text: string, size = 48): string[] {
+  const pieces: string[] = [];
+  for (let index = 0; index < text.length;) {
+    let end = Math.min(index + size, text.length);
+    if (end < text.length) {
+      const space = text.lastIndexOf(' ', end);
+      if (space > index) end = space + 1;
+    }
+    pieces.push(text.slice(index, end));
+    index = end;
+  }
+  return pieces.length ? pieces : [''];
+}
+
 export function demoProvider(options: number | DemoProviderOptions = {}): Provider {
   const delay = typeof options === 'number' ? options : options.delay ?? DEFAULT_DELAY;
   return {
@@ -233,9 +252,9 @@ export function demoProvider(options: number | DemoProviderOptions = {}): Provid
       const step = script.steps[Math.min(toolCount(request.messages, index), script.steps.length - 1)]!;
       const steered = steer(request.messages, index);
       const body = steered ? `Following your note — ${steered.trim()} ${step.text}` : step.text;
-      for (const fragment of body.match(/.{1,48}(\s|$)/g) ?? [body]) {
+      for (const piece of fragment(body)) {
         await setTimeout(delay, undefined, { signal: request.signal });
-        yield { type: 'text-delta', delta: fragment } satisfies ModelChunk;
+        yield { type: 'text-delta', delta: piece } satisfies ModelChunk;
       }
       if (step.call) yield { type: 'tool-call', call: { id: randomUUID(), ...step.call } } satisfies ModelChunk;
       yield { type: 'usage', usage: { inputTokens: 148, outputTokens: Math.ceil(body.length / 4) } } satisfies ModelChunk;

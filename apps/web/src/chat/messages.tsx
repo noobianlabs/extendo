@@ -1,9 +1,10 @@
 import { Asterisk, Check, ChevronRight, CircleAlert, FilePenLine, FileText, Globe, Search, ShieldCheck, Terminal, Wrench } from 'lucide-react';
-import { lazy, memo, Suspense, useRef, useState } from 'react';
+import { Fragment, lazy, memo, Suspense, useRef, useState } from 'react';
 import Markdown from 'react-markdown';
 import type { Components } from 'react-markdown';
 import type { ApprovalDecision, ApprovalRequest, JsonValue, Message, Subagent, ToolCall, ToolResult } from '@extendo/contracts';
 import type { FileDiff } from './diff';
+import { Seam } from '../workshop/seam';
 import styles from './chat.module.css';
 
 const DiffView = lazy(() => import('./diff'));
@@ -156,6 +157,7 @@ const SubagentApproval = memo(function SubagentApproval({
 
 export const AssistantStep = memo(function AssistantStep({
   message, startsReply, streaming, active, approvalByCall, onApproval, connected, subagents, onOpenSubagents, onSubagentApproval,
+  seam, pluginTools, onOpenPlugin,
 }: {
   message: AssistantMessage;
   startsReply: boolean;
@@ -167,6 +169,9 @@ export const AssistantStep = memo(function AssistantStep({
   subagents: Subagent[];
   onOpenSubagents: () => void;
   onSubagentApproval: (sessionId: string, requestId: string, decision: ApprovalDecision) => Promise<void>;
+  seam?: { plugin: string; tool: string };
+  pluginTools?: Map<string, string>;
+  onOpenPlugin?: () => void;
 }) {
   if (!message.content && !message.reasoning && !message.tools.length && !streaming) return null;
   return (
@@ -193,15 +198,18 @@ export const AssistantStep = memo(function AssistantStep({
             humanizeTool(call.name) === 'Delegate'
               ? <DelegateCard key={call.id} call={call} turnId={message.turnId} subagents={subagents} onOpenSubagents={onOpenSubagents}
                 onSubagentApproval={onSubagentApproval} connected={connected} />
-              : <ToolCard
-                key={call.id}
-                call={call}
-                result={result}
-                approval={approvalByCall?.get(call.id)}
-                onApproval={onApproval}
-                active={active}
-                connected={connected}
-              />
+              : <Fragment key={call.id}>
+                {seam && seam.tool === call.name && <Seam plugin={seam.plugin} tool={seam.tool} onOpen={onOpenPlugin ?? (() => {})} />}
+                <ToolCard
+                  call={call}
+                  result={result}
+                  approval={approvalByCall?.get(call.id)}
+                  onApproval={onApproval}
+                  active={active}
+                  connected={connected}
+                  plugin={pluginTools?.has(call.name)}
+                />
+              </Fragment>
           ))}
         </div>
       )}
@@ -257,13 +265,14 @@ function ToolOutput({ output }: { output: JsonValue }) {
   return <pre className={styles.toolOutput} tabIndex={0}>{print(output) || 'No output.'}</pre>;
 }
 
-export const ToolCard = memo(function ToolCard({ call, result, approval, onApproval, active, connected }: {
+export const ToolCard = memo(function ToolCard({ call, result, approval, onApproval, active, connected, plugin }: {
   call: ToolCall;
   result?: ToolResult;
   approval?: ApprovalRequest;
   onApproval: OnApproval;
   active: boolean;
   connected: boolean;
+  plugin?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const diff = fileDiff(result?.output);
@@ -277,15 +286,15 @@ export const ToolCard = memo(function ToolCard({ call, result, approval, onAppro
   const shell = name === 'shell' || name === 'bash' || name === 'exec' || name === 'runcommand';
   const fetch = name === 'webfetch';
   const Icon = diff || write ? FilePenLine : read ? FileText : search ? Search : shell || test ? Terminal : fetch ? Globe : Wrench;
-  const label = humanizeTool(call.name);
+  const label = plugin ? call.name : humanizeTool(call.name);
   const path = diff?.path ?? input?.path ?? input?.filePath ?? input?.file;
-  const summary = [path, input?.command, input?.cmd, input?.query, input?.pattern, input?.url, output?.path, call.input]
+  const summary = [path, input?.command, input?.cmd, input?.query, input?.pattern, input?.url, input?.text, output?.path, call.input]
     .find((value): value is string => typeof value === 'string' && Boolean(value.trim()));
   const pathEnd = summary && summary === path ? Math.max(summary.lastIndexOf('/'), summary.lastIndexOf('\\')) + 1 : 0;
   const status = approval ? 'Approval required' : result?.isError ? 'Failed' : result ? 'Completed' : active ? 'In progress' : 'No result';
 
   return (
-    <div className={styles.tool} data-approval={Boolean(approval) || undefined}>
+    <div className={styles.tool} data-approval={Boolean(approval) || undefined} data-plugin={plugin || undefined}>
       <details onToggle={event => setExpanded(event.currentTarget.open)}>
         <summary className={styles.toolSummary} title={summary ? `${call.name}: ${summary}` : call.name}>
           <Icon size={15} className={styles.toolIcon} aria-hidden="true" />

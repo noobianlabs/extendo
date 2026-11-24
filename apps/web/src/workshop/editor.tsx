@@ -24,9 +24,9 @@ const highlight = HighlightStyle.define([
 ]);
 
 const theme = EditorView.theme({
-  '&': { backgroundColor: 'transparent', color: 'var(--text)', height: '100%', fontSize: 'var(--type-caption)' },
+  '&': { backgroundColor: 'transparent', color: 'var(--text)', height: '100%', fontSize: '12px' },
   '&.cm-focused': { outline: 'none' },
-  '.cm-scroller': { fontFamily: 'var(--font-mono)', lineHeight: '1.75', overflow: 'auto' },
+  '.cm-scroller': { fontFamily: 'var(--font-mono)', lineHeight: '20px', letterSpacing: '0', overflow: 'auto' },
   '.cm-content': { padding: '10px 0 24px', caretColor: 'var(--accent)' },
   '.cm-line': { padding: '0 14px 0 6px' },
   '.cm-gutters': { backgroundColor: 'transparent', color: 'var(--muted-3)', border: 'none', paddingLeft: '6px' },
@@ -59,7 +59,7 @@ export default function PluginEditor({ value, onChange, onSave, label }: EditorP
         doc: value,
         extensions: [
           lineNumbers(), history(), indentOnInput(), bracketMatching(), highlightActiveLine(),
-          EditorView.lineWrapping,
+          EditorState.tabSize.of(2),
           keymap.of([
             { key: 'Mod-s', preventDefault: true, run: () => { handlers.current.onSave(); return true; } },
             ...historyKeymap, ...defaultKeymap, indentWithTab,

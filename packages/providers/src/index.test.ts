@@ -1,6 +1,6 @@
 import type { ModelChunk, ModelRequest } from '@extendo/contracts';
 import { describe, expect, it } from 'vitest';
-import { anthropicProvider, deepSeekProvider, demoProvider, openAIProvider, pluginTools, providerInfos, synthesizeInput } from './index.js';
+import { anthropicProvider, deepSeekProvider, demoProvider, fragment, openAIProvider, pluginTools, providerInfos, synthesizeInput } from './index.js';
 
 const request: ModelRequest = {
   model: 'model',
@@ -115,6 +115,28 @@ describe('provider adapters', () => {
     const text = output.flatMap((chunk) => chunk.type === 'text-delta' ? [chunk.delta] : []).join('');
     expect(text).toContain('{"words":5}');
     expect(output).not.toContainEqual(expect.objectContaining({ type: 'tool-call' }));
+  });
+
+  it('never drops a character while streaming, even inside an unbroken run', () => {
+    const payload = 'word_count answered {"words":26,"characters":127,"longest":"Extendo"}. That is all.';
+    expect(fragment(payload).join('')).toBe(payload);
+    expect(fragment(payload, 12).join('')).toBe(payload);
+    expect(fragment('x'.repeat(140), 16).join('')).toBe('x'.repeat(140));
+    expect(fragment('')).toEqual(['']);
+  });
+
+  it('streams the plugin answer with the payload it was given, intact', async () => {
+    const request: ModelRequest = {
+      model: 'model', system: [], signal: new AbortController().signal,
+      tools: [{ name: 'word_count', description: 'Count words', inputSchema: { type: 'object' } }],
+      messages: [
+        { role: 'user', content: 'Run the word_count plugin tool.' },
+        { role: 'tool', result: { callId: 'call-1', name: 'word_count', output: { words: 26, characters: 127, longest: 'Extendo' }, isError: false } },
+      ],
+    };
+    const text = (await collect(demoProvider(0).stream(request)))
+      .flatMap((chunk) => chunk.type === 'text-delta' ? [chunk.delta] : []).join('');
+    expect(text).toContain('`{"words":26,"characters":127,"longest":"Extendo"}`');
   });
 
   it('builds a tool input from the schema the model was shown', () => {
