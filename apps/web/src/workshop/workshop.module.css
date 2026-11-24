@@ -586,49 +586,42 @@
 
 .seamRule {
   flex: 1;
-  height: 1px;
-  background: color-mix(in srgb, var(--accent) 55%, transparent);
+  block-size: 1px;
+  background: var(--accent-line);
+  clip-path: inset(0);
+  transition: clip-path var(--dur-3) var(--ease-seam), background-color var(--dur-1) var(--ease-out);
 }
 
-.seamRule[data-side='start'] { transform-origin: left center; animation: seamStart 320ms var(--ease-seam) both; }
-.seamRule[data-side='end'] { transform-origin: right center; animation: seamEnd 320ms var(--ease-seam) both; }
+.seamRule[data-side='end'] { transition-delay: 40ms, 0ms; }
 
-@keyframes seamStart {
-  from { transform: scaleX(0); }
-  to { transform: scaleX(1); }
-}
-
-@keyframes seamEnd {
-  from { transform: scaleX(0); }
-  to { transform: scaleX(1); }
+@starting-style {
+  .seamRule[data-side='start'] { clip-path: inset(0 100% 0 0); }
+  .seamRule[data-side='end'] { clip-path: inset(0 0 0 100%); }
 }
 
 .seamLabel {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-2);
   flex: none;
-  font-family: var(--font-mono);
-  font-size: 11px;
+  font: var(--type-mono);
   color: var(--muted-2);
   white-space: nowrap;
-  animation: seamLabel 260ms var(--ease-out) 80ms both;
+  opacity: 1;
+  transition: opacity var(--dur-1) var(--ease-out) 60ms, color var(--dur-1) var(--ease-out);
 }
 
-@keyframes seamLabel {
-  from { opacity: 0; }
-  to { opacity: 1; }
+@starting-style {
+  .seamLabel { opacity: 0; }
 }
 
 .seamLabel b { font-weight: 500; color: var(--text); }
-.seamLabel code { font-family: var(--font-mono); color: var(--accent); }
+.seamLabel code { font: inherit; color: var(--accent); }
 
 @media (hover: hover) and (pointer: fine) {
   .seam:hover .seamLabel { color: var(--text); }
   .seam:hover .seamRule { background: var(--accent); }
 }
-
-.seamRule, .seamLabel { transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out); }
 
 @media (max-width: 1100px) {
   .panel { width: 100%; border-inline-start: 0; }
@@ -638,9 +631,10 @@
 @media (prefers-reduced-motion: reduce) {
   .panel, .content, .create, .saved, .chip, .seamRule, .seamLabel, .sweep {
     animation: none;
-    transition-property: opacity, background, color, border-color, visibility;
+    transition-property: opacity, background-color, color, border-color, visibility;
     transform: none;
   }
+  .seamRule { clip-path: none; }
   .iconButton:active, .tab:active, .danger:active, .save:active, .primary:active, .chip:active { transform: none; }
   .sweep { display: none; }
 }
