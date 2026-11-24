@@ -55,6 +55,18 @@ describe('plugin workshop', () => {
     expect(workshop.list().mounts.map(({ revision }) => revision)).toEqual([1, 2]);
   });
 
+  it('keeps attributing a tool when a save only changes its body', async () => {
+    await workshop.create({ name: 'Word count' });
+    const same = templateFor('Word count').replace('Count the words', 'Count every word');
+
+    const saved = await workshop.save('word-count', same);
+
+    expect(saved.extension.error).toBeUndefined();
+    expect(saved.extension.tools.map(({ name }) => name)).toEqual(['word_count']);
+    expect(saved.extension.tools[0]?.description).toMatch(/Count every word/);
+    expect(workshop.tools().find(({ name }) => name === 'word_count')?.extensionId).toBe('word-count');
+  });
+
   it('keeps the running revision when a new one does not parse', async () => {
     await workshop.create({ name: 'Word count' });
 

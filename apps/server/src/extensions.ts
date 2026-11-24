@@ -230,9 +230,9 @@ export class ExtensionWorkshop {
   /** Mounts a plugin, replacing whatever this id had mounted before. */
   private async mount(record: Extension, plugin?: Plugin): Promise<void> {
     const registry = this.registry();
-    const before = new Set(registry.list().map(({ name }) => name));
     this.loader.unmount(this.mountId(record.id));
     this.mounted.delete(record.id);
+    const before = new Set(registry.list().map(({ name }) => name));
     await this.loader.mount(plugin ?? await this.instantiate(record), this.mountId(record.id));
     this.mounted.add(record.id);
     const tools = registry.list().filter(({ name }) => !before.has(name));
