@@ -98,6 +98,16 @@ async function runFlow(page, url, { capture }) {
   await sideBySide(page);
   await layout(page, '1440');
   if (capture) await shot(page, '04-agent-call');
+
+  await page.getByTestId('open-tools').click();
+  await page.getByTestId('tool-list').waitFor();
+  const listed = await page.getByTestId('tool-list').innerText();
+  check(/word_count/.test(listed) && /plugin\/word-count/.test(listed), 'the tool list attributes the new tool to its plugin');
+  check(/demo_read/.test(listed), 'the tool list still shows the tools that ship with Extendo');
+  await settle(page, 260);
+  if (capture) await shot(page, '04b-tool-list');
+  await page.keyboard.press('Escape');
+  await page.getByTestId('tool-list').waitFor({ state: 'detached' });
 }
 
 const WORST_NAMES = [

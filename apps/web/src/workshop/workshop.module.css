@@ -388,6 +388,109 @@
 }
 
 /* The capability strip sits above the composer and names the tools a plugin added. */
+.stripWrap {
+  position: relative;
+  inline-size: 100%;
+  max-inline-size: var(--chat-width, 45rem);
+  margin-inline: auto;
+  padding-inline: var(--chat-edge, 1rem);
+}
+
+.toolList {
+  position: absolute;
+  inset-block-end: calc(100% + 6px);
+  inset-inline-start: var(--chat-edge, 1rem);
+  z-index: 30;
+  width: min(360px, calc(100vw - 2rem));
+  max-height: min(360px, 50vh);
+  display: flex;
+  flex-direction: column;
+  background: var(--popover);
+  border: var(--hairline) solid var(--border-2);
+  border-radius: var(--radius, 6px);
+  box-shadow: var(--sh-overlay);
+  transform-origin: bottom left;
+  animation: listIn var(--dur-2) var(--ease-out) both;
+}
+
+@keyframes listIn {
+  from { opacity: 0; transform: translateY(4px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+
+.toolListHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 10px 6px;
+  font-size: 10px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  font-weight: 560;
+  color: var(--muted-1);
+  border-block-end: var(--hairline) solid var(--border-1);
+}
+
+.toolListCount { font-family: var(--font-mono); color: var(--muted-3); letter-spacing: 0; }
+
+.toolListBody {
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.toolRow {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 8px;
+  padding: 5px 6px;
+  border-radius: var(--radius-sm, 4px);
+}
+
+.toolRow + .toolRow { border-block-start: var(--hairline) solid var(--border-1); }
+
+.toolBuiltin, .toolOwned {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.toolBuiltin { color: var(--text); }
+.toolOwned { color: var(--accent); }
+
+.toolWhere {
+  justify-self: end;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--muted-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 18ch;
+}
+
+.toolDescription {
+  grid-column: 1 / -1;
+  font-size: 11px;
+  line-height: 15px;
+  color: var(--muted-2);
+  overflow-wrap: anywhere;
+}
+
+.toolListFoot {
+  margin: 0;
+  padding: 6px 10px 8px;
+  border-block-start: var(--hairline) solid var(--border-1);
+  font-size: 11px;
+  color: var(--muted-3);
+}
+
 .strip {
   display: flex;
   align-items: center;

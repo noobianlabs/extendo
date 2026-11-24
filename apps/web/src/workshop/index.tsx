@@ -226,22 +226,62 @@ export function Workshop({ open, state, tools, selected, onSelect, onCreate, onS
   );
 }
 
+/**
+ * The tools the model is offered on its next request. Plugin tools are named, built-ins are counted,
+ * and the list opens upward from its trigger so a screenshot can show the whole surface at once.
+ */
 export function CapabilityStrip({ tools, onOpen, plugins }: { tools: LiveTool[]; onOpen: () => void; plugins: number }) {
+  const [list, setList] = useState(false);
+  const wrap = useRef<HTMLDivElement>(null);
   const authored = tools.filter(({ extensionId }) => extensionId);
   const builtin = tools.length - authored.length;
+
+  useEffect(() => {
+    if (!list) return;
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') { event.preventDefault(); setList(false); } };
+    const onPointer = (event: PointerEvent) => {
+      if (!wrap.current?.contains(event.target as Node)) setList(false);
+    };
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('pointerdown', onPointer);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('pointerdown', onPointer);
+    };
+  }, [list]);
+
   return (
-    <div className={styles.strip} data-testid="capability-strip">
-      <button type="button" className={styles.stripButton} onClick={onOpen}>
-        <CircleDot size={11} aria-hidden="true" />
-        <span className={styles.stripLabel}>tools</span>
-      </button>
-      {authored.length === 0
-        ? <span className={styles.stripMuted}>{plugins === 0 ? 'no plugins yet' : 'no plugin tools loaded'}</span>
-        : authored.map(({ name, extensionId }) => <button key={name} type="button" className={styles.chip}
-          onClick={onOpen} title={`Provided by ${extensionId}`} data-testid={'live-tool-' + name}>
-          {name}
-        </button>)}
-      <span className={styles.stripCount}>{builtin} built in</span>
+    <div className={styles.stripWrap} ref={wrap}>
+      <div className={styles.strip} data-testid="capability-strip">
+        <button type="button" className={styles.stripButton} onClick={() => setList((value) => !value)}
+          aria-expanded={list} aria-haspopup="dialog" data-testid="open-tools">
+          <CircleDot size={11} aria-hidden="true" />
+          <span className={styles.stripLabel}>tools</span>
+        </button>
+        {authored.length === 0
+          ? <span className={styles.stripMuted}>{plugins === 0 ? 'no plugins yet' : 'no plugin tools loaded'}</span>
+          : authored.map(({ name, extensionId }) => <button key={name} type="button" className={styles.chip}
+            onClick={onOpen} title={`Provided by ${extensionId}`} data-testid={'live-tool-' + name}>
+            {name}
+          </button>)}
+        <span className={styles.stripCount}>{builtin} built in</span>
+      </div>
+      {list && (
+        <div className={styles.toolList} role="dialog" aria-label="Tools the agent can use" data-testid="tool-list">
+          <p className={styles.toolListHead}>
+            <span>agent tools</span>
+            <span className={styles.toolListCount}>{tools.length}</span>
+          </p>
+          <ul className={styles.toolListBody}>
+            {tools.map((tool) => <li key={tool.name} className={styles.toolRow}>
+              <code className={tool.extensionId ? styles.toolOwned : styles.toolBuiltin}>{tool.name}</code>
+              <span className={styles.toolWhere}>{tool.extensionId ? 'plugin/' + tool.extensionId : 'built in'}</span>
+              <span className={styles.toolDescription}>{tool.description}</span>
+            </li>)}
+          </ul>
+          <p className={styles.toolListFoot}>The model is offered these on its next request.</p>
+        </div>
+      )}
     </div>
   );
 }
