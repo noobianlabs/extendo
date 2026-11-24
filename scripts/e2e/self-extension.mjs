@@ -60,8 +60,10 @@ async function closeWorkshop(page) {
 }
 
 async function runFlow(page, url, { capture }) {
+  const beat = (ms) => capture ? page.waitForTimeout(ms) : Promise.resolve();
   await page.goto(url, { waitUntil: 'networkidle' });
   await page.getByTestId('open-workshop').waitFor();
+  await beat(600);
 
   await openWorkshop(page);
   await page.getByRole('button', { name: 'Write your first plugin' }).waitFor();
@@ -72,20 +74,25 @@ async function runFlow(page, url, { capture }) {
   await page.getByTestId('create-plugin').click();
   await page.getByTestId('plugin-editor').waitFor();
   await settle(page, 420);
+  await beat(900);
   if (capture) await shot(page, '02-editor');
 
   const editor = page.getByTestId('plugin-editor');
   await editor.click();
   await page.keyboard.press('ControlOrMeta+a');
-  await page.keyboard.type(SOURCE, { delay: 1 });
+  await beat(300);
+  await page.keyboard.type(SOURCE, { delay: capture ? 4 : 1 });
+  await beat(500);
   await page.keyboard.press('ControlOrMeta+s');
   await page.getByTestId('saved').waitFor();
   await settle(page, 420);
+  await beat(900);
   const revision = await page.locator('[data-testid="workshop"]').innerText();
   check(/revision\s*2/i.test(revision), 'the save wrote revision 2 and remounted it');
   check((await page.getByTestId('live-tool-word_count').count()) === 1, 'the plugin tool appears in the capability strip');
   if (capture) await shot(page, '03-saved');
 
+  await beat(400);
   await page.getByRole('textbox', { name: 'Message' }).fill(PROMPT);
   await page.getByRole('button', { name: 'Send message' }).click();
   await page.getByTestId('plugin-seam').waitFor({ timeout: 25_000 });
@@ -105,6 +112,7 @@ async function runFlow(page, url, { capture }) {
   check(/word_count/.test(listed) && /plugin\/word-count/.test(listed), 'the tool list attributes the new tool to its plugin');
   check(/demo_read/.test(listed), 'the tool list still shows the tools that ship with Extendo');
   await settle(page, 260);
+  await beat(900);
   if (capture) await shot(page, '04b-tool-list');
   await page.keyboard.press('Escape');
   await page.getByTestId('tool-list').waitFor({ state: 'detached' });
