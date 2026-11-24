@@ -33,6 +33,16 @@ The parent's log is the only source of truth: `projectSubagents` folds those eve
 
 `@extendo/pullrequests` reads the open pull request for a thread's branch, either through `gh pr view` or from a scripted reader for the keyless demo. The server's `ThreadViewer` joins three things per thread: the stored row, the derived state plus swarm, and the pull request, caching the read for twenty seconds and the derivation until the session's last sequence number changes. `pull-request-merge` merges only when the reader supports it. `GET /api/preview/:sessionId` renders the branch's page from the demo workspace, and the console iframes it beside the review.
 
+## Authored plugins
+
+`ExtensionWorkshop` in `apps/server/src/extensions.ts` owns the plugins a person writes in the app. It keeps `$EXTENDO_HOME/plugins/<id>/` (an `index.mjs` and a `plugin.json` manifest), imports each revision from a revision-stamped module URL, and swaps it into the same `PluginLoader` the built-in profile uses. Because the agent reads the tool registry on every step, a plugin's tools join the next model request with no restart and no second code path.
+
+Two properties make it safe to save from the app. A revision is imported and validated *before* the previous mount is disposed, so a syntax error, a bad export, or a throwing factory leaves the running plugin untouched and restores the file on disk. A revision that fails while mounting re-mounts the previous one. Revision numbers only increase, so a module URL is never reused after a failure.
+
+The workshop reports what a plugin provides by diffing the tool registry around a mount, which is also how `GET /api/extensions/tools` attributes each live tool to the plugin that added it. `mounts.jsonl` is an append-only record of every join; the console derives the transcript's seam from it plus the session log rather than adding an event to the session vocabulary.
+
+Its HTTP surface is its own Hono app (`apps/server/src/extensionApi.ts`) dispatched ahead of the console app on `/api/extensions`, sharing the same `OriginPolicy` the HTTP guard and the `/ws` upgrade use.
+
 ## RPC and HTTP
 
 The WebSocket endpoint is `/ws`. Requests are `{ id, method, params }` and responses are `{ id, result }` or `{ id, error: { code, message } }`. Unsolicited messages are `{ event, data }`. IDs are request correlation values; `sessionId` is the stable key for subscription, cancellation, message submission and approval answers.
