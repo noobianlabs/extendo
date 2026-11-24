@@ -125,21 +125,22 @@ export function ChatSurface({
                       if (request) attachedApprovals.add(request.requestId);
                     }
                   }
+                  const joinedTool = message.tools.find(({ call }) => pluginTools?.get(call.name) === joined)?.call.name;
                   return (
                     <Fragment key={message.id}>
-                    {joined && <Seam plugin={joined} tool={message.tools.find(({ call }) => pluginTools?.get(call.name) === joined)?.call.name ?? ''} onOpen={() => onOpenWorkshop()} />}
-                    <AssistantStep
-                      message={message}
-                      startsReply={startsReply}
-                      streaming={message === draft && status === 'working' && !approvals.length}
-                      active={running && message.turnId === latestTurn}
-                      approvalByCall={messageApprovals}
-                      onApproval={onApproval}
-                      connected={connected}
-                      subagents={subagents}
-                      onOpenSubagents={onOpenSubagents}
-                      onSubagentApproval={onSubagentApproval}
-                    />
+                      {joined && joinedTool && <Seam plugin={joined} tool={joinedTool} onOpen={onOpenWorkshop} />}
+                      <AssistantStep
+                        message={message}
+                        startsReply={startsReply}
+                        streaming={message === draft && status === 'working' && !approvals.length}
+                        active={running && message.turnId === latestTurn}
+                        approvalByCall={messageApprovals}
+                        onApproval={onApproval}
+                        connected={connected}
+                        subagents={subagents}
+                        onOpenSubagents={onOpenSubagents}
+                        onSubagentApproval={onSubagentApproval}
+                      />
                     </Fragment>
                   );
                 })}
