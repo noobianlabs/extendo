@@ -4,11 +4,13 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getRequestListener } from '@hono/node-server';
 import { createHttpApp, type HttpOptions } from './http.js';
+import { resolveOriginPolicy } from './origin.js';
 import { createRuntime, type Runtime, type RuntimeOptions } from './runtime.js';
 import { attachRpc } from './ws.js';
 
 export * from './runtime.js';
 export { createHttpApp } from './http.js';
+export * from './origin.js';
 
 export interface ServerOptions extends RuntimeOptions, HttpOptions {
   port?: number;
@@ -34,10 +36,11 @@ export async function startServer(options: ServerOptions = {}): Promise<ExtendoS
   const runtime = await createRuntime({ ...options, mode: 'web' });
   const candidates = [resolve('apps/web/dist'), fileURLToPath(new URL('../../web/dist', import.meta.url))];
   const webRoot = options.webRoot ?? candidates.find((candidate) => existsSync(resolve(candidate, 'index.html')));
-  const server = createServer(getRequestListener(createHttpApp(runtime, { ...options, webRoot }).fetch));
+  const policy = resolveOriginPolicy(options);
+  const server = createServer(getRequestListener(createHttpApp(runtime, { ...options, webRoot, origin: policy }).fetch));
   let closeRpc: (() => Promise<void>) | undefined;
   try {
-    closeRpc = attachRpc(server, runtime, options.devOrigins);
+    closeRpc = attachRpc(server, runtime, policy);
     await listen(server, options.port ?? 4310);
     const address = server.address();
     if (!address || typeof address === 'string') throw new Error('Could not determine the HTTP listener port');

@@ -2,7 +2,7 @@ import type { IncomingMessage, Server } from 'node:http';
 import type { Duplex } from 'node:stream';
 import { WebSocket, WebSocketServer } from 'ws';
 import { rpcRequestSchema, type RpcEventName, type RpcId, type RpcServerFrame } from '@extendo/contracts';
-import { allowsUpgrade } from './http.js';
+import { decideOrigin, describeOrigin, resolveOriginPolicy, type OriginPolicy } from './origin.js';
 import type { Runtime } from './runtime.js';
 
 const liveEvents: RpcEventName[] = ['session/event', 'agent/status', 'agent/error', 'assistant/delta', 'tool/approval', 'tool/approval-answered', 'pull-request/updated'];
@@ -11,7 +11,7 @@ const liveEvents: RpcEventName[] = ['session/event', 'agent/status', 'agent/erro
  * Wires the browser client to the runtime: session-scoped live events, coalesced thread snapshots
  * for the status board, and the steering, stopping, and merging the console needs.
  */
-export function attachRpc(server: Server, runtime: Runtime, devOrigins?: string[]): () => Promise<void> {
+export function attachRpc(server: Server, runtime: Runtime, policy: OriginPolicy = resolveOriginPolicy()): () => Promise<void> {
   const { sessions, workspace, agent, swarm, viewer } = runtime;
   const wss = new WebSocketServer({ noServer: true, maxPayload: 512 * 1024 });
   const subscriptions = new Map<WebSocket, Set<string>>();
@@ -55,7 +55,9 @@ export function attachRpc(server: Server, runtime: Runtime, devOrigins?: string[
   }
 
   const upgrade = (request: IncomingMessage, socket: Duplex, head: Buffer) => {
-    if (request.url?.split('?')[0] !== '/ws' || !allowsUpgrade(request, devOrigins)) {
+    const decision = decideOrigin(request.headers, policy);
+    if (request.url?.split('?')[0] !== '/ws' || !decision.allowed) {
+      if (request.url?.split('?')[0] === '/ws') runtime.ctx.logger.debug(`Rejected /ws upgrade from ${describeOrigin(decision)}`);
       socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');
       return;
     }
