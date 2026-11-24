@@ -5,7 +5,7 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   resolve: {
     alias: Object.fromEntries(
-      ['contracts', 'kernel', 'session', 'agent', 'providers', 'tools', 'pullrequests', 'server', 'plugin-sdk'].flatMap((name) => {
+      ['contracts', 'kernel', 'session', 'agent', 'providers', 'tools', 'pullrequests', 'git', 'swarm', 'server', 'plugin-sdk'].flatMap((name) => {
         const path = fileURLToPath(new URL(`./${name === 'server' ? 'apps' : 'packages'}/${name}/src/index.ts`, import.meta.url));
         return existsSync(path) ? [[`@extendo/${name}`, path]] : [];
       }),

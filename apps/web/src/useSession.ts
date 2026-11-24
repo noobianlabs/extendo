@@ -16,10 +16,12 @@ export interface SessionView {
   loading: boolean;
   lastSeq: number;
   tokens: number;
+  /** Bumps on every file this session writes, so a surface showing the working tree can re-read it. */
+  revision: number;
 }
 
 function empty(sessionId?: string): SessionView {
-  return { sessionId, messages: [], approvals: [], connected: false, loading: Boolean(sessionId), lastSeq: 0, tokens: 0 };
+  return { sessionId, messages: [], approvals: [], connected: false, loading: Boolean(sessionId), lastSeq: 0, tokens: 0, revision: 0 };
 }
 
 function modifyStep(messages: Message[], stepId: string, update: (message: Assistant) => Assistant) {
@@ -49,9 +51,13 @@ function settle(state: SessionView, event: SessionEvent): SessionView {
     }
     case 'tool/result': {
       const { result, stepId } = event.data;
-      return { ...next, messages: modifyStep(next.messages, stepId, (message) => ({
-        ...message, tools: message.tools.map((tool) => tool.call.id === result.callId ? { ...tool, result } : tool),
-      })) };
+      return {
+        ...next,
+        revision: next.revision + (writesFiles(result) ? 1 : 0),
+        messages: modifyStep(next.messages, stepId, (message) => ({
+          ...message, tools: message.tools.map((tool) => tool.call.id === result.callId ? { ...tool, result } : tool),
+        })),
+      };
     }
     case 'step/end':
       return { ...next, tokens: next.tokens + (event.data.usage?.inputTokens ?? 0) + (event.data.usage?.outputTokens ?? 0),
@@ -61,6 +67,16 @@ function settle(state: SessionView, event: SessionEvent): SessionView {
         error: event.data.outcome === 'failed' ? event.data.error : next.error };
     default: return next;
   }
+}
+
+/** A tool that can change the working tree, so the surface showing it knows to re-read. */
+function writesFiles(result: { name: string; isError: boolean }): boolean {
+  return !result.isError && /(^|[_-])(write|edit|patch|shell|bash|exec)([_-]|$)/i.test(result.name);
+}
+
+export function written(messages: Message[]): number {
+  return messages.reduce((count, message) => message.role !== 'assistant' ? count
+    : count + message.tools.filter((tool) => tool.result && writesFiles(tool.result)).length, 0);
 }
 
 export function reduceSession(state: SessionView, frame: RpcEvent): SessionView {
@@ -137,7 +153,9 @@ export function useSession(
     };
 
     void api<SessionSnapshot>('/sessions/' + encodeURIComponent(sessionId), { signal: abort.signal }).then((snapshot) => {
-      update((current) => ({ ...current, messages: snapshot.messages, lastSeq: snapshot.lastSeq, loading: false }));
+      update((current) => ({
+        ...current, messages: snapshot.messages, lastSeq: snapshot.lastSeq, loading: false, revision: written(snapshot.messages),
+      }));
       connect();
     }).catch((error: unknown) => {
       if (!stopped) update((current) => ({ ...current, loading: false, error: error instanceof Error ? error.message : 'Could not load the session.' }));

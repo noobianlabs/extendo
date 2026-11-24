@@ -4,6 +4,7 @@ import type { AgentStatus, ApprovalDecision, ExtensionState, LiveTool, Project, 
 import { api, json } from './api';
 import { createExtension, loadExtensions, pluginToolOwners, removeExtension, saveExtension } from './extensions';
 import { ChatSurface } from './chat';
+import { createWorktree } from './git/client';
 import { Shell } from './chrome';
 import { RunBar } from './console/threadHeader';
 import { useNow } from './console/useNow';
@@ -154,7 +155,7 @@ export function App() {
     return () => window.removeEventListener('keydown', handle);
   }, [cancelTurn, palette, preferences, openProject, status]);
 
-  const createThread = async () => {
+  const createThread = async (worktree = false) => {
     if (fixture) return;
     if (!project) { setOpenProject(true); return; }
     try {
@@ -163,8 +164,24 @@ export function App() {
       setActiveThread(created.id);
       setForcedProvider(undefined);
       setNotice(undefined);
+      if (!worktree) return;
+      try {
+        const moved = await createWorktree(created.sessionId);
+        setData((current) => ({
+          ...current,
+          threads: current.threads.map((item) => item.id === moved.thread.id ? moved.thread : item),
+        }));
+        setNotice(`This thread runs in its own worktree on ${moved.branch}.`);
+      } catch (error) {
+        setNotice(`The thread started in the shared checkout: ${message(error)}`);
+      }
     } catch (error) { setNotice(message(error)); }
   };
+  const forgetThread = useCallback((id: string) => {
+    setData((current) => ({ ...current, threads: current.threads.filter((item) => item.id !== id) }));
+    setActiveThread((current) => current === id ? undefined : current);
+    setNotice(undefined);
+  }, []);
   const saveProject = async (path: string) => {
     const created = await api<Project>('/projects', json('POST', { path }));
     setData((current) => ({
@@ -258,9 +275,10 @@ export function App() {
       onSelectProject={(id) => { setActiveProject(id); setActiveThread(undefined); setForcedProvider(undefined); setNotice(undefined); }}
       onSelectThread={selectThread} onNewThread={() => { void createThread(); }} onOpenProject={() => setOpenProject(true)}
       onOpenPalette={() => setPalette(true)} onOpenSettings={() => setPreferences(true)} labels={fixture?.labels}
-      rail={<Inspector key={thread?.id} thread={thread} status={status} messages={messages} now={now}
+      rail={<Inspector key={thread?.id} thread={thread} project={project} status={status} messages={messages} now={now}
         tab={panelTab} onTabChange={setPanelTab} onClose={toggleInspector}
-        onSteer={steerSubagent} onStop={stopSubagent} onApproval={answerFor} />}>
+        onSteer={steerSubagent} onStop={stopSubagent} onApproval={answerFor}
+        revision={view.revision} onThread={onThread} onDeleted={forgetThread} />}>
       <div className="extendo-main" data-workshop={workshop.open ? 'open' : undefined}
         style={workshop.open ? { paddingInlineEnd: 'var(--workshop-inset)' } : undefined}>
         {notice && <div className="extendo-notice" role="alert"><CircleAlert size={14} aria-hidden="true" />{notice}<button type="button" onClick={() => setNotice(undefined)}>Dismiss</button></div>}
@@ -288,6 +306,7 @@ export function App() {
     </Shell>
     <CommandPalette open={palette} threads={threads} onSelectThread={selectThread} onClose={() => setPalette(false)} commands={[
       { id: 'new', title: 'New thread', description: 'Start a conversation in this project', run: () => { void createThread(); } },
+      { id: 'worktree', title: 'New thread in its own worktree', description: 'Give the thread its own branch and checkout', run: () => { void createThread(true); } },
       { id: 'project', title: 'Open project folder', run: () => setOpenProject(true) },
       { id: 'inspector', title: inspector ? 'Hide workspace inspector' : 'Show workspace inspector', description: 'Plan, changes, and terminal', run: toggleInspector },
       { id: 'settings', title: 'Settings', description: 'Model and appearance', run: () => setPreferences(true) },

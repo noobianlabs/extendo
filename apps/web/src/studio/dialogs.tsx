@@ -270,6 +270,58 @@ function FormFooter({
   </footer>;
 }
 
+export interface ConfirmRequest {
+  title: string;
+  /** What will be destroyed, named. */
+  description: ReactNode;
+  confirmLabel: string;
+  /** A second decision the person can make in the same confirmation, off unless they turn it on. */
+  option?: string;
+  onConfirm: (choice: { checked: boolean }) => Promise<void> | void;
+}
+
+/** A confirmation that names what it destroys. The cancel button holds focus for a destructive one. */
+function ConfirmContent({ request, onClose }: { request: ConfirmRequest; onClose: () => void }) {
+  const id = useId();
+  const confirmRef = useRef<HTMLButtonElement>(null);
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState('');
+  const [checked, setChecked] = useState(false);
+  return <Modal titleId={`${id}-title`} initialFocus={cancelRef} onClose={onClose} pending={pending}>
+    <DialogHeader titleId={`${id}-title`} title={request.title} icon={<CircleAlert size={17} />}
+      pending={pending} onClose={onClose} />
+    <div className={styles.form}>
+      <div className={styles.formBody}>
+        <div className={styles.confirmBody}>
+          {request.description}
+          {request.option && <label className={styles.confirmOption}>
+            <input type="checkbox" checked={checked} disabled={pending} onChange={(event) => setChecked(event.target.checked)} />
+            <span>{request.option}</span>
+          </label>}
+        </div>
+        {error && <p role="alert" className={styles.error}><CircleAlert size={15} />{error}</p>}
+      </div>
+      <footer className={styles.formFoot}>
+        <button type="button" className={styles.secondary} ref={cancelRef} disabled={pending}
+          onClick={onClose}>Cancel</button>
+        <button type="button" ref={confirmRef} className={styles.destructive} disabled={pending}
+          onClick={async () => {
+            setPending(true);
+            setError('');
+            try { await request.onConfirm({ checked }); onClose(); }
+            catch (cause) { setError(cause instanceof Error && cause.message ? cause.message : 'That action did not finish.'); }
+            finally { setPending(false); }
+          }}>{pending ? 'Working…' : request.confirmLabel}</button>
+      </footer>
+    </div>
+  </Modal>;
+}
+
+export function ConfirmDialog({ request, onClose }: { request?: ConfirmRequest; onClose: () => void }) {
+  return request ? <ConfirmContent request={request} onClose={onClose} /> : null;
+}
+
 type SettingsProps = {
   open: boolean;
   settings: Settings;

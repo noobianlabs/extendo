@@ -18,7 +18,26 @@ node packages/cli/dist/index.js web --port 4310
 node packages/cli/dist/index.js headless "say hello" --provider demo
 ```
 
-Opening a project attaches a local directory; Extendo does not create or manage Git worktrees. The web console reads pull requests through `gh` when it runs against a real repository, and a failed read leaves the card out rather than blocking the thread. Extendo listens on loopback, stores workspace and session data under `~/.extendo` unless `EXTENDO_HOME` is set, and does not store provider keys in the workspace. Shell commands run as your user and are not sandboxed. Review every write or shell approval before allowing it.
+Opening a project attaches a local directory. The demo workspace is a real git repository with a bare
+`origin` under `~/.extendo`, real branches, and one worktree per seeded thread, so the Changes tab shows
+actual git state rather than a picture of it.
+
+The Changes tab in the right panel is the working tree of the checkout the active thread is in: branch,
+upstream, ahead/behind, files grouped staged/changes/untracked, a diff per file, stage and unstage,
+commit with a message, push, and open a pull request. A thread can run in its own `git worktree` on its
+own branch — from the command palette ("New thread in its own worktree"), or from the worktree row in
+that panel — so two threads never edit one checkout. Removing a worktree or deleting a thread first asks
+a confirmation that names the uncommitted files it would destroy.
+
+Extendo never force-pushes, and never stages `.env`-style paths, private keys, or credential files
+unless you say so twice. Pushing needs a remote named `origin`; opening a pull request needs `gh`
+installed and signed in, and when either is missing the panel says what is missing instead of offering a
+button that cannot work. The web console reads existing pull requests through `gh` when it runs against
+a real repository, and a failed read leaves the card out rather than blocking the thread.
+
+Extendo listens on loopback, stores workspace and session data under `~/.extendo` unless `EXTENDO_HOME`
+is set, and does not store provider keys in the workspace. Shell commands run as your user and are not
+sandboxed. Review every write or shell approval before allowing it.
 
 ## Running behind a proxy or tunnel
 

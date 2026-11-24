@@ -1,10 +1,11 @@
-import { lazy, Suspense, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useId, useMemo, useState } from 'react';
 import type { KeyboardEvent, ReactNode } from 'react';
 import {
   ChevronRight, Circle, CircleCheck, CircleDot, CircleX, FileCode2, FilePenLine,
   FileSearch, FlaskConical, PanelRight, SquareTerminal, Wrench, X,
 } from 'lucide-react';
-import type { AgentStatus, ApprovalDecision, JsonValue, Message, Thread } from '@extendo/contracts';
+import type { AgentStatus, ApprovalDecision, JsonValue, Message, Project, Thread } from '@extendo/contracts';
+import { SourceSurface } from '../git/Source';
 import { boardLabels } from '../console/board';
 import { humanizeTool } from '../chat/messages';
 import { PreviewPane } from '../console/preview';
@@ -246,9 +247,11 @@ function Terminal({ activity }: { activity: Activity[] }) {
 }
 
 export function Inspector({
-  thread, messages, status, now, tab: controlled, onTabChange, onClose, onSteer, onStop, onApproval,
+  thread, project, messages, status, now, tab: controlled, onTabChange, onClose, onSteer, onStop, onApproval,
+  revision, onThread, onDeleted,
 }: {
   thread?: Thread;
+  project?: Project;
   messages: Message[];
   status: AgentStatus;
   now: number;
@@ -258,6 +261,10 @@ export function Inspector({
   onSteer: (subagentId: string, message: string) => Promise<void>;
   onStop: (subagentId: string) => Promise<void>;
   onApproval: (sessionId: string, requestId: string, decision: ApprovalDecision) => Promise<void>;
+  /** Bumps when the thread writes a file, so the working tree can be re-read. */
+  revision: number;
+  onThread: (thread: Thread) => void;
+  onDeleted: (threadId: string) => void;
 }) {
   const [ownTab, setTab] = useState<InspectorTab>('Overview');
   const tab = controlled ?? ownTab;
@@ -267,14 +274,6 @@ export function Inspector({
   };
   const [opened, setOpened] = useState<{ threadId?: string; path: string }>();
   const baseId = useId();
-  const openedButton = useRef<HTMLButtonElement>(null);
-  const focusChange = useRef(false);
-  useLayoutEffect(() => {
-    if (tab === 'Changes' && focusChange.current) {
-      openedButton.current?.focus();
-      focusChange.current = false;
-    }
-  }, [opened, tab]);
   const data = useMemo(() => {
     const currentTurn = messages.at(-1)?.turnId;
     const recentMessages = messages.filter((message) => message.turnId === currentTurn);
@@ -299,10 +298,8 @@ export function Inspector({
     }
     return { activity, changes, plan };
   }, [messages, status, thread?.state]);
-  const selectChange = (path: string) => {
-    focusChange.current = true;
-    setOpened({ threadId: thread?.id, path });
-    setTab('Changes');
+  const toggleChange = (path: string) => {
+    setOpened((current) => current && current.threadId === thread?.id && current.path === path ? undefined : { threadId: thread?.id, path });
   };
   function navigateTabs(event: KeyboardEvent<HTMLButtonElement>, index: number) {
     const next = event.key === 'ArrowRight' ? (index + 1) % tabs.length
@@ -345,11 +342,16 @@ export function Inspector({
           </Section>
           <Section title="Changed files" meta={data.changes.length ? formatNumber.format(data.changes.length) : undefined}>
             {data.changes.length ? <ul className={styles.files}>
-              {data.changes.map((change) => <li key={change.path}>
-                <button type="button" className={styles.fileRow} aria-label={changeLabel(change)} onClick={() => selectChange(change.path)}>
-                  <FileRow {...change} />
-                </button>
-              </li>)}
+              {data.changes.map((change) => {
+                const expanded = opened?.threadId === thread.id && opened.path === change.path;
+                return <li key={change.path}>
+                  <button type="button" className={styles.fileRow} aria-expanded={expanded} aria-label={changeLabel(change)}
+                    onClick={() => toggleChange(change.path)}>
+                    <FileRow {...change} /><ChevronRight className={styles.chevron} size={13} />
+                  </button>
+                  {expanded && <Diff change={change} />}
+                </li>;
+              })}
             </ul> : thread.pullRequest ? <p className={styles.empty}>
               The pull request on {thread.pullRequest.branch} carries {formatNumber.format(thread.pullRequest.changedFiles)} files,
               {' '}+{formatNumber.format(thread.pullRequest.additions)} −{formatNumber.format(thread.pullRequest.deletions)}. Tool-level diffs appear here as this session edits files.
@@ -370,21 +372,10 @@ export function Inspector({
               })}
             </ul> : <p className={styles.empty}>No tools run yet.</p>}
           </Section>
-        </> : name === 'Changes' ? <Section title="Changed files" meta={data.changes.length ? formatNumber.format(data.changes.length) : undefined}>
-          {data.changes.length ? <ul className={styles.files}>
-            {data.changes.map((change) => {
-              const expanded = opened?.threadId === thread.id && opened.path === change.path;
-              return <li key={change.path}>
-                <button type="button" aria-expanded={expanded} aria-label={changeLabel(change)} className={styles.fileRow}
-                  ref={expanded ? openedButton : null}
-                  onClick={() => setOpened(expanded ? undefined : { threadId: thread.id, path: change.path })}>
-                  <FileRow {...change} /><ChevronRight className={styles.chevron} size={13} />
-                </button>
-                {expanded && <Diff change={change} />}
-              </li>;
-            })}
-          </ul> : <p className={styles.empty}>File edits will appear here.</p>}
-        </Section> : <Terminal activity={data.activity} />)}
+        </> : name === 'Changes' ? <SourceSurface
+          thread={thread} project={project} active={tab === 'Changes'} agentStatus={status}
+          revision={revision} onThread={onThread} onDeleted={onDeleted} />
+        : <Terminal activity={data.activity} />)}
     </div>)}
   </section>;
 }

@@ -8,6 +8,12 @@ import type { SessionStore } from '@extendo/session';
 /** A stored thread before the console derives its state, swarm, and pull request. */
 export type ThreadRow = Omit<Thread, 'status' | 'state' | 'stateSince' | 'subagents' | 'pullRequest' | 'preview'>;
 
+function row(record: unknown): ThreadRow | undefined {
+  if (record === undefined) return undefined;
+  const stored = record as ThreadRow;
+  return { ...stored, branch: stored.branch ?? undefined, worktree: stored.worktree ?? undefined };
+}
+
 export class WorkspaceState {
   private readonly db: DatabaseSync;
 
@@ -27,6 +33,10 @@ export class WorkspaceState {
       ) STRICT;
       CREATE TABLE IF NOT EXISTS preferences (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT;
     `);
+    const columns = this.db.prepare('PRAGMA table_info(threads)').all() as { name?: string }[];
+    if (!columns.some((column) => column.name === 'worktree')) {
+      this.db.exec('ALTER TABLE threads ADD COLUMN worktree TEXT');
+    }
   }
 
   projects(): Project[] {
@@ -51,12 +61,25 @@ export class WorkspaceState {
     const records = projectId
       ? this.db.prepare('SELECT * FROM threads WHERE projectId = ? ORDER BY rowid').all(projectId)
       : this.db.prepare('SELECT * FROM threads ORDER BY rowid').all();
-    return (records as unknown as ThreadRow[]).map((row) => ({ ...row, branch: row.branch ?? undefined }));
+    return (records as unknown as ThreadRow[]).flatMap((record) => row(record) ?? []);
   }
 
   threadBySession(sessionId: string): ThreadRow | undefined {
-    const row = this.db.prepare('SELECT * FROM threads WHERE sessionId = ?').get(sessionId) as unknown as ThreadRow | undefined;
-    return row && { ...row, branch: row.branch ?? undefined };
+    return row(this.db.prepare('SELECT * FROM threads WHERE sessionId = ?').get(sessionId));
+  }
+
+  thread(id: string): ThreadRow | undefined {
+    return row(this.db.prepare('SELECT * FROM threads WHERE id = ?').get(id));
+  }
+
+  /** Moves a thread to another checkout: its own worktree, or back to the project's directory. */
+  setThreadCheckout(sessionId: string, checkout: { cwd: string; branch?: string; worktree?: string }): void {
+    this.db.prepare('UPDATE threads SET cwd = ?, branch = ?, worktree = ? WHERE sessionId = ?')
+      .run(checkout.cwd, checkout.branch ?? null, checkout.worktree ?? null, sessionId);
+  }
+
+  deleteThread(id: string): void {
+    this.db.prepare('DELETE FROM threads WHERE id = ?').run(id);
   }
 
   createThread(sessions: SessionStore, project: Project, input: { title: string; provider: string; model: string; branch?: string }): ThreadRow {

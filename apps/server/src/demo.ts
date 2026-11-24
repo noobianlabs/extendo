@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import type { Project, PullRequest, SubagentActivity } from '@extendo/contracts';
 import type { SessionStore } from '@extendo/session';
 import type { WorkspaceState } from './state.js';
+import { seedDemoRepo, type DemoCheckout } from './demoRepo.js';
 
 /**
  * The keyless demo workspace. Every thread below is a real session in the event log, so the console
@@ -42,21 +43,22 @@ export interface DemoSeed {
   dataDir: string;
 }
 
-export function seedDemo({ workspace, sessions, dataDir }: DemoSeed): void {
+export async function seedDemo({ workspace, sessions, dataDir }: DemoSeed): Promise<void> {
   if (workspace.projects().length) return;
   const root = join(dataDir, 'demo', 'northstar-ui');
   mkdirSync(root, { recursive: true, mode: 0o700 });
+  const checkout = await seedDemoRepo(root, join(dataDir, 'demo', 'northstar.git')).catch(() => undefined);
   const project = workspace.openProject(root, 'Northstar UI');
 
-  seedFinishedThread(workspace, sessions, project);
-  seedSwarmThread(workspace, sessions, project);
-  seedHistoryThread(workspace, sessions, project, {
+  seedFinishedThread(workspace, sessions, project, checkout);
+  seedSwarmThread(workspace, sessions, project, checkout);
+  seedHistoryThread(workspace, sessions, project, checkout, {
     title: 'Trace the keyboard shortcut',
     branch: 'main',
     question: 'Where does the search shortcut get registered?',
     answer: 'The toolbar and the results list both register it through the command palette, so the shortcut keeps working while the empty state is showing.',
   });
-  seedHistoryThread(workspace, sessions, project, {
+  seedHistoryThread(workspace, sessions, project, checkout, {
     title: 'Draft the regional search release notes',
     branch: 'chore/release-notes',
     question: 'What should the release notes say about the search update?',
@@ -65,10 +67,19 @@ export function seedDemo({ workspace, sessions, dataDir }: DemoSeed): void {
   seedFailedThread(workspace, sessions, project);
 }
 
-function seedFinishedThread(workspace: WorkspaceState, sessions: SessionStore, project: Project): void {
+/** Puts a thread in the worktree its branch really has, so its checkout and its label agree. */
+function useCheckout(workspace: WorkspaceState, sessions: SessionStore, thread: { sessionId: string }, branch: string, checkout?: DemoCheckout): void {
+  const path = checkout?.worktrees[branch];
+  if (!path) return;
+  workspace.setThreadCheckout(thread.sessionId, { cwd: path, branch, worktree: path });
+  sessions.move(thread.sessionId, path);
+}
+
+function seedFinishedThread(workspace: WorkspaceState, sessions: SessionStore, project: Project, checkout?: DemoCheckout): void {
   const thread = workspace.createThread(sessions, project, {
     title: 'Make empty search results useful', provider: 'demo', model: 'demo', branch: 'feat/empty-state-copy',
   });
+  useCheckout(workspace, sessions, thread, 'feat/empty-state-copy', checkout);
   sessions.appendMany(thread.sessionId, [
     { type: 'turn/start', data: { turnId: 'turn-1', provider: 'demo', model: 'demo' } },
     { type: 'user/message', data: { turnId: 'turn-1', messageId: 'message-1', content: 'Make the empty search results useful.' } },
@@ -91,10 +102,11 @@ function seedFinishedThread(workspace: WorkspaceState, sessions: SessionStore, p
   ]);
 }
 
-function seedSwarmThread(workspace: WorkspaceState, sessions: SessionStore, project: Project): void {
+function seedSwarmThread(workspace: WorkspaceState, sessions: SessionStore, project: Project, checkout?: DemoCheckout): void {
   const thread = workspace.createThread(sessions, project, {
     title: 'Audit empty-state copy across search surfaces', provider: 'demo', model: 'demo', branch: 'feat/swarm-audit',
   });
+  useCheckout(workspace, sessions, thread, 'feat/swarm-audit', checkout);
   const audit = activity({
     id: 'activity-audit', kind: 'search', label: 'search "No results"', state: 'done', startedAt: iso(96_000), durationMs: 1_400,
   });
@@ -125,11 +137,13 @@ function seedHistoryThread(
   workspace: WorkspaceState,
   sessions: SessionStore,
   project: Project,
+  checkout: DemoCheckout | undefined,
   options: { title: string; branch: string; question: string; answer: string },
 ): void {
   const thread = workspace.createThread(sessions, project, {
     title: options.title, provider: 'demo', model: 'demo', branch: options.branch,
   });
+  useCheckout(workspace, sessions, thread, options.branch, checkout);
   sessions.appendMany(thread.sessionId, [
     { type: 'turn/start', data: { turnId: 'turn-history', provider: 'demo', model: 'demo' } },
     { type: 'user/message', data: { turnId: 'turn-history', messageId: 'message-history', content: options.question } },

@@ -1,10 +1,23 @@
 import type { RpcEvent, RpcId, RpcRequest, RpcResults, RpcServerFrame } from '@extendo/contracts';
 
+/** A refusal from the server with the code and details the surface needs to explain it. */
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly code?: string,
+    readonly detail?: Record<string, unknown>,
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
 export async function api<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch('/api' + path, options);
   if (!response.ok) {
-    const data = await response.json().catch(() => null) as { error?: string } | null;
-    throw new Error(data?.error ?? 'Could not reach the local Extendo server.');
+    const data = await response.json().catch(() => null) as ({ error?: string; code?: string } & Record<string, unknown>) | null;
+    throw new ApiError(data?.error ?? 'Could not reach the local Extendo server.', response.status, data?.code, data ?? undefined);
   }
   return response.json() as Promise<T>;
 }
