@@ -69,6 +69,10 @@ export interface AgentRuntime {
   cancel(sessionId: string): boolean;
   approvals(sessionId: string): ApprovalRequest[];
   answer(sessionId: string, requestId: string, decision: ApprovalDecision): boolean;
+  /** Delivers input to the running turn at its next step. Returns false when no turn is running. */
+  steer(sessionId: string, input: string): boolean;
+  /** Holds input until the running turn ends, then starts the next turn with it. */
+  queue(sessionId: string, input: string, options: SendOptions): boolean;
   shutdown(): Promise<void>;
 }
 
@@ -77,6 +81,8 @@ export class Agent implements AgentRuntime {
   private readonly outcomes = new Map<string, AgentStatus>();
   private readonly pending = new Map<string, PendingApproval>();
   private readonly remembered = new Map<string, Set<string>>();
+  private readonly steers = new Map<string, string[]>();
+  private readonly queued = new Map<string, { input: string; options: SendOptions }>();
 
   constructor(private readonly ctx: Ctx, private readonly sessions: SessionStore, private readonly options: AgentOptions = {}) {}
 
@@ -117,6 +123,39 @@ export class Agent implements AgentRuntime {
     pending.resolve(decision);
     this.ctx.emit('tool/approval-answered', { sessionId, requestId, decision });
     return true;
+  }
+
+  steer(sessionId: string, input: string): boolean {
+    if (!this.turns.has(sessionId) || !input.trim()) return false;
+    const pending = this.steers.get(sessionId) ?? [];
+    pending.push(input.trim());
+    this.steers.set(sessionId, pending);
+    return true;
+  }
+
+  queue(sessionId: string, input: string, options: SendOptions): boolean {
+    if (!input.trim() || this.queued.has(sessionId)) return false;
+    this.queued.set(sessionId, { input: input.trim(), options });
+    return true;
+  }
+
+  private takeSteers(sessionId: string): string[] {
+    const pending = this.steers.get(sessionId);
+    if (!pending?.length) return [];
+    this.steers.delete(sessionId);
+    return pending;
+  }
+
+  private drainQueue(sessionId: string): void {
+    const next = this.queued.get(sessionId);
+    if (!next) return;
+    this.queued.delete(sessionId);
+    try {
+      const handle = this.start(sessionId, next.input, next.options);
+      void handle.done.catch(() => this.ctx.logger.warn('Queued turn could not be settled'));
+    } catch (error) {
+      this.ctx.logger.warn(`Queued turn did not start: ${errorMessage(error)}`);
+    }
   }
 
   async shutdown(): Promise<void> {
@@ -222,6 +261,9 @@ export class Agent implements AgentRuntime {
         const ref: StepRef = { turnId, stepId };
         const messageId = randomUUID();
         const currentInput = index === 0 ? input : undefined;
+        for (const steered of this.takeSteers(sessionId)) {
+          add({ type: 'user/message', data: { turnId, messageId: randomUUID(), content: steered } });
+        }
         const tools = new Map(ctx.get<Registry<Tool>>('tools').list().map((tool) => [tool.name, tool]));
         const system = await Promise.all(ctx.get<Registry<SystemSection>>('system').list().map((section) => section.text({ session, ...ref })));
         const pre = await ctx.waterfall('agent/pre-step', { ...ref, sessionId, input: currentInput });
@@ -285,7 +327,7 @@ export class Agent implements AgentRuntime {
           ]);
           committed = true;
           for (const [id, call] of calls) unsettled.set(id, call);
-          const context: ToolCtx = { ctx, ...ref, sessionId, cwd: session.cwd, signal };
+          const context: ToolCtx = { ctx, ...ref, sessionId, provider: provider.id, model: options.model, interactive: Boolean(options.interactive), cwd: session.cwd, signal };
           for (const call of calls.values()) {
             const toolResult = await this.runTool(call, context, tools, options.interactive ?? false);
             add({ type: 'tool/result', data: { ...ref, result: toolResult } });
@@ -294,7 +336,7 @@ export class Agent implements AgentRuntime {
           signal.throwIfAborted();
           add({ type: 'step/end', data: { ...ref, outcome: 'completed', usage } });
           final = text || final;
-          if (!calls.size) break;
+          if (!calls.size && !this.steers.get(sessionId)?.length) break;
         } catch (error) {
           const outcome: TurnOutcome = signal.aborted ? 'cancelled' : 'failed';
           const message = errorMessage(error);
@@ -316,6 +358,8 @@ export class Agent implements AgentRuntime {
       this.turns.delete(sessionId);
       this.setStatus(sessionId, result.outcome === 'failed' ? 'failed' : 'idle');
       ctx.dispose();
+      if (result.outcome === 'cancelled') this.queued.delete(sessionId);
+      else this.drainQueue(sessionId);
     }
   }
 }

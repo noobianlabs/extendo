@@ -79,10 +79,15 @@
 .tabs {
   display: flex;
   flex: none;
-  gap: 12px;
-  padding-inline: 13px;
+  gap: 7px;
+  padding-inline: 9px;
   border-block-end: 0.5px solid var(--border-2);
   overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .tabs button {
@@ -94,7 +99,7 @@
   padding-inline: 2px;
   border-block-end: 2px solid transparent;
   color: var(--muted-1);
-  font-size: 0.75rem;
+  font-size: 0.7188rem;
   font-weight: 550;
   white-space: nowrap;
 }
@@ -104,7 +109,7 @@
 }
 
 .tabs button[aria-selected="true"] {
-  border-block-end-color: var(--primary);
+  border-block-end-color: var(--text);
   color: var(--text);
 }
 
@@ -135,26 +140,6 @@
   background: var(--section);
   color: var(--muted-1);
   font-size: 0.75rem;
-}
-
-.sessionState span {
-  flex: none;
-  inline-size: 6px;
-  block-size: 6px;
-  border-radius: 50%;
-  background: var(--muted-2);
-}
-
-.sessionState[data-status="working"] span {
-  background: var(--primary);
-}
-
-.sessionState[data-status="waiting"] span {
-  background: var(--warning);
-}
-
-.sessionState[data-status="failed"] span {
-  background: var(--destructive);
 }
 
 .section {

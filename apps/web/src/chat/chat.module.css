@@ -1,6 +1,6 @@
 .chat {
-  --chat-edge: clamp(0.75rem, 3vw, 1.5rem);
-  --chat-width: 48rem;
+  --chat-edge: var(--extendo-content-edge, clamp(0.75rem, 3vw, 1.5rem));
+  --chat-width: var(--extendo-content-width, 48rem);
   display: flex;
   flex: 1 1 0;
   flex-direction: column;
@@ -736,7 +736,7 @@
   gap: 0 0.25rem;
   min-block-size: 1rem;
   margin-block-start: 0.375rem;
-  padding-inline: 0.1875rem;
+  padding-inline: 0.8125rem;
   color: var(--muted-1);
   font-size: 0.6875rem;
 }
@@ -800,4 +800,104 @@
   .chat :is(.iconButton, .send, .stop) {
     inline-size: 2.25rem;
   }
+}
+
+.subagentWaiting {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  inline-size: calc(100% - 2 * var(--chat-edge));
+  max-inline-size: calc(var(--chat-width) - 2 * var(--chat-edge));
+  margin-inline: auto;
+  padding: 0.3125rem 0.5rem 0.3125rem 0.625rem;
+  border: var(--hairline, 0.5px) solid var(--border-2);
+  border-inline-start: 2px solid var(--primary);
+  border-radius: 5px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 0.75rem;
+}
+
+.subagentWaiting button {
+  flex: none;
+  block-size: 24px;
+  padding: 0 8px;
+  border: var(--hairline, 0.5px) solid var(--border-3);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.6875rem;
+}
+
+.delegate {
+  display: flex;
+  flex-direction: column;
+  min-inline-size: 0;
+}
+
+.delegateHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-inline-size: 0;
+  min-block-size: 2rem;
+  padding: 0.25rem 0.5625rem;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.delegateHeader:focus-visible {
+  outline: 1px solid var(--ring);
+  outline-offset: -1px;
+}
+
+.delegateState {
+  flex: none;
+  margin-inline-start: auto;
+  color: var(--muted-2);
+  font-size: 0.6875rem;
+  white-space: nowrap;
+}
+
+.delegateTasks {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 0;
+  padding: 0.125rem 0.625rem 0.375rem 1.75rem;
+  list-style: none;
+  color: var(--muted-1);
+  font-size: 0.75rem;
+}
+
+.delegateRole {
+  margin-inline-start: 0.5rem;
+  color: var(--muted-2);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.625rem;
+}
+
+.delegateLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  align-self: flex-start;
+  margin: 0 0 0.375rem 1.4375rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted-1);
+  font: inherit;
+  font-size: 0.6875rem;
+  cursor: pointer;
+}
+
+.delegateLink:hover {
+  color: var(--text);
 }

@@ -7,6 +7,7 @@ const LIMIT = 128_000;
 
 interface ComposerProps {
   running: boolean;
+  steering: boolean;
   waiting: boolean;
   loading: boolean;
   needsProvider: boolean;
@@ -20,7 +21,7 @@ interface ComposerProps {
 }
 
 export function Composer({
-  running, waiting, loading, needsProvider, connected, providerLabel, suggestion, onSend, onCancel, onOpenSettings, onOpenPalette,
+  running, steering, waiting, loading, needsProvider, connected, providerLabel, suggestion, onSend, onCancel, onOpenSettings, onOpenPalette,
 }: ComposerProps) {
   const text = useRef('');
   const composing = useRef(false);
@@ -36,7 +37,7 @@ export function Composer({
   const [dragging, setDragging] = useState(false);
   const [localError, setLocalError] = useState('');
   const label = providerLabel.trim() || 'Provider';
-  const canSend = !running && !loading && !needsProvider && connected && !sending && !attaching && Boolean(draft.trim());
+  const canSend = (!running || steering) && !loading && !needsProvider && connected && !sending && !attaching && Boolean(draft.trim());
 
   function updateDraft(value: string) {
     text.current = value;
@@ -132,7 +133,8 @@ export function Composer({
     return event.dataTransfer.types.includes('Files');
   }
 
-  const hint = loading ? 'Opening session…' : !connected ? 'Disconnected' : waiting ? 'Waiting for approval' : sending ? 'Sending…' : attaching ? 'Reading file…' : '';
+  const hint = loading ? 'Opening session…' : !connected ? 'Disconnected' : waiting ? 'Waiting for approval'
+    : steering ? 'Send to steer this run' : sending ? 'Sending…' : attaching ? 'Reading file…' : '';
 
   return (
     <div className={styles.composeDock}>
@@ -173,7 +175,7 @@ export function Composer({
           rows={1}
           maxLength={LIMIT}
           value={draft}
-          placeholder={needsProvider ? 'Draft a message…' : 'Message Extendo…'}
+          placeholder={needsProvider ? 'Draft a message…' : steering ? 'Steer Extendo while it works…' : 'Message Extendo…'}
           onChange={event => {
             updateDraft(event.currentTarget.value);
             if (localError) setLocalError('');
@@ -209,15 +211,16 @@ export function Composer({
           />
           <div className={styles.sendControl}>
             {hint && <span role="status" className={styles.composeStatus}>{hint}</span>}
-            {running ? (
-              <button type="button" className={styles.stop} disabled={!connected} onClick={onCancel} title="Stop response" aria-label="Stop response">
+            {running && (
+              <button type="button" className={styles.stop} disabled={!connected} onClick={onCancel}
+                title={waiting ? 'Cancel the turn and its approval' : 'Stop response'} aria-label="Stop response">
                 <Square size={12} fill="currentColor" aria-hidden="true" />
               </button>
-            ) : (
-              <button type="submit" className={styles.send} disabled={!canSend} title="Send message (Enter)" aria-label="Send message">
-                <ArrowUp size={17} aria-hidden="true" />
-              </button>
             )}
+            <button type="submit" className={styles.send} disabled={!canSend}
+              title={steering ? 'Steer this run (Enter)' : 'Send message (Enter)'} aria-label={steering ? 'Steer this run' : 'Send message'}>
+              <ArrowUp size={17} aria-hidden="true" />
+            </button>
           </div>
         </div>
         {dragging && <div className={styles.dropTarget} aria-hidden="true"><Paperclip size={16} /> Drop to attach as text</div>}
@@ -226,7 +229,7 @@ export function Composer({
         <div className={styles.localError} role="alert"><CircleAlert size={13} aria-hidden="true" /> {localError}</div>
       ) : (
         <div className={styles.composeFoot}>
-          {draft.length >= LIMIT ? 'Message limit reached' : <><kbd>Enter</kbd> to send <span aria-hidden="true">·</span> <kbd>Shift + Enter</kbd> for a new line</>}
+          {draft.length >= LIMIT ? 'Message limit reached' : <><kbd>Enter</kbd> to {steering ? 'steer' : 'send'} <span aria-hidden="true">·</span> <kbd>Shift + Enter</kbd> for a new line</>}
         </div>
       )}
     </div>

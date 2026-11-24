@@ -86,7 +86,7 @@ describe('Extendo transport', () => {
         event: expect.objectContaining({ type: 'turn/end', data: expect.objectContaining({ turnId: started?.result.turnId, outcome: 'completed' }) }),
       }) }));
     }, 5000);
-    expect(server.runtime.sessions.snapshot(sessionId).messages.at(-1)).toMatchObject({ content: expect.stringContaining('No files on your machine were changed') });
+    expect(server.runtime.sessions.snapshot(sessionId).messages.at(-1)).toMatchObject({ content: expect.stringContaining('The empty state now names the query') });
   }, 12_000);
 
   it('cancels a running stream and emits the durable cancelled turn', async () => {

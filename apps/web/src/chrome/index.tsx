@@ -1,13 +1,17 @@
+import type { ProviderInfo } from '@extendo/contracts';
 import {
-  ChevronLeft, ChevronRight, ChevronsUpDown, Command, Cpu, Folder,
-  FolderOpen, GitBranch, MessagesSquare, PanelLeft, PanelLeftClose, PanelRight, Plus,
+  ChevronLeft, ChevronRight, ChevronsUpDown, CircleCheck, CircleX, Clock3, Command, Cpu, Folder,
+  FolderOpen, GitBranch, Merge, MessagesSquare, PanelLeft, PanelLeftClose, PanelRight, Plus,
   Search, Settings, X, type LucideIcon,
 } from 'lucide-react';
 import {
   useEffect, useId, useLayoutEffect, useMemo, useRef, useState,
   type KeyboardEvent, type ReactNode, type RefObject,
 } from 'react';
-import type { AgentStatus, Project, Thread } from '@extendo/contracts';
+import type { Project, Thread } from '@extendo/contracts';
+import { boardLabels, elapsed, groupBoard, threadState, threadSummary } from '../console/board';
+import { ModelPicker } from '../console/modelPicker';
+import board from '../console/console.module.css';
 import './shell.css';
 
 const defaultLabels = {
@@ -24,10 +28,14 @@ export type ShellLabels = { [K in keyof typeof defaultLabels]: string };
 export interface ShellProps {
   projects: Project[];
   threads: Thread[];
+  providers: ProviderInfo[];
+  selection: { provider: string; model?: string };
+  onSelectModel: (provider: string, model: string) => void;
   projectId?: string;
   thread?: Thread;
   providerLabel: string;
   loading: boolean;
+  now: number;
   rightOpen: boolean;
   onToggleRight: () => void;
   onSelectProject: (id: string) => void;
@@ -42,13 +50,6 @@ export interface ShellProps {
   usageLabel?: string;
 }
 
-const statusLabels: Record<AgentStatus, string> = {
-  idle: 'Idle',
-  working: 'Working',
-  waiting: 'Waiting',
-  failed: 'Failed',
-};
-
 const pageSize = 40;
 const countFormat = new Intl.NumberFormat();
 const dateFormat = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' });
@@ -60,13 +61,14 @@ const projectName = (project: Project) => project.name?.trim() || 'Untitled proj
 const threadName = (thread: Thread) => thread.title?.trim() || 'Untitled thread';
 const normalizeSearch = (value: string) => value.normalize('NFKD').replace(/\p{Mark}/gu, '').toLocaleLowerCase();
 
-function formatThreadDate(value: string, now: Date) {
+function formatThreadDate(value: string, now: number) {
   const date = new Date(value);
   if (!value || !Number.isFinite(date.getTime()) || date.getTime() === 0) return;
-  const isToday = date.toDateString() === now.toDateString();
+  const today = new Date(now);
+  const isToday = date.toDateString() === today.toDateString();
   return {
     short: isToday ? relativeDateFormat.format(0, 'day')
-      : (date.getFullYear() === now.getFullYear() ? dateFormat : dateYearFormat).format(date),
+      : (date.getFullYear() === today.getFullYear() ? dateFormat : dateYearFormat).format(date),
     full: fullDateFormat.format(date),
   };
 }
@@ -145,21 +147,33 @@ function Mark() {
   );
 }
 
-function StatusDot({ status }: { status: AgentStatus }) {
-  return <span className="extendo-chrome-status-dot" data-status={status} aria-hidden="true" />;
+/**
+ * A path shortened to its last few segments, so a tight header still shows the project name
+ * instead of a fragment like "/.no…". The full path stays in the title and for screen readers.
+ */
+function elidePath(path: string, budget = 20): string {
+  const separator = path.includes('\\') ? '\\' : '/';
+  const segments = path.split(/[\\/]+/).filter(Boolean);
+  if (segments.length < 2) return path;
+  const kept: string[] = [];
+  let length = 0;
+  for (let index = segments.length - 1; index >= 0; index -= 1) {
+    const segment = segments[index]!;
+    const next = length + segment.length + (kept.length ? 1 : 0);
+    if (kept.length && next > budget) break;
+    kept.unshift(segment);
+    length = next;
+  }
+  const tail = kept.join(separator);
+  return kept.length < segments.length ? `…${separator}${tail}` : path;
 }
 
 function PathText({ path }: { path: string }) {
-  const end = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
-  if (end < 0 || end === path.length - 1) {
-    return <bdi className="extendo-chrome-ellipsis extendo-chrome-mono" title={path}>{path}</bdi>;
-  }
   return (
-    <span className="extendo-chrome-path extendo-chrome-mono" title={path} dir="ltr">
+    <bdi className="extendo-chrome-ellipsis extendo-chrome-mono" title={path} dir="ltr">
       <span className="extendo-chrome-sr-only">{path}</span>
-      <span className="extendo-chrome-path-start" aria-hidden="true">{path.slice(0, end + 1)}</span>
-      <bdi className="extendo-chrome-path-end" aria-hidden="true">{path.slice(end + 1)}</bdi>
-    </span>
+      <span aria-hidden="true">{elidePath(path)}</span>
+    </bdi>
   );
 }
 
@@ -283,13 +297,14 @@ function ProjectPicker({
 }
 
 function ThreadList({
-  threads, project, activeId, loading, labels, onSelect, searchRef,
+  threads, project, activeId, loading, labels, now, onSelect, searchRef,
 }: {
   threads: Thread[];
   project?: Project;
   activeId?: string;
   loading: boolean;
   labels: ShellLabels;
+  now: number;
   onSelect: (id: string) => void;
   searchRef: RefObject<HTMLInputElement | null>;
 }) {
@@ -315,7 +330,6 @@ function ThreadList({
   const start = page * pageSize;
   const visible = filtered.slice(start, start + pageSize);
   const tabId = [focusedId, activeId].find(id => visible.some(({ item }) => item.id === id)) ?? visible[0]?.item.id;
-  const now = new Date();
 
   function getRows() {
     return Array.from(listRef.current?.querySelectorAll<HTMLButtonElement>('[data-thread-row]') ?? []);
@@ -391,38 +405,57 @@ function ThreadList({
       <div className="extendo-chrome-thread-scroll" ref={listRef} aria-busy={loading}>
         {visible.length > 0 ? (
           <ul className="extendo-chrome-thread-list" onKeyDown={moveRowFocus}>
-            {visible.map(({ item }) => {
-              const title = threadName(item);
-              const status = statusLabels[item.status];
-              const date = formatThreadDate(item.createdAt, now);
-              const branch = item.branch?.trim();
-              const details = [title, status, branch, date?.full].filter(Boolean).join(' · ');
+            {groupBoard(visible.map(({ item }) => item)).map(({ state, threads: rows }) => {
+              const total = filtered.filter(({ item }) => threadState(item) === state).length;
               return (
-                <li key={item.id}>
-                  <button
-                    type="button"
-                    data-thread-row=""
-                    aria-current={item.id === activeId ? 'page' : undefined}
-                    tabIndex={item.id === tabId ? 0 : -1}
-                    className="extendo-chrome-thread-row"
-                    title={details}
-                    aria-label={details}
-                    onFocus={() => setFocusedId(item.id)}
-                    onClick={() => onSelect(item.id)}
-                  >
-                    <StatusDot status={item.status} />
-                    <span className="extendo-chrome-thread-label">
-                      <bdi className="extendo-chrome-ellipsis extendo-chrome-thread-title">{title}</bdi>
-                      {(date || item.status !== 'idle' || branch) && (
-                        <span className="extendo-chrome-thread-meta">
-                          {item.status !== 'idle' && <span>{status}</span>}
-                          {item.status !== 'idle' && date && <span className="extendo-chrome-meta-dot">·</span>}
-                          {date ? <time dateTime={item.createdAt} title={date.full}>{date.short}</time>
-                            : item.status === 'idle' && branch && <bdi className="extendo-chrome-ellipsis extendo-chrome-mono">{branch}</bdi>}
-                        </span>
-                      )}
-                    </span>
-                  </button>
+                <li key={state} className={board.boardGroup}>
+                  <h3 className={board.boardHeading} id={`${headingId}-${state}`}>
+                    {boardLabels[state]}<span>{countFormat.format(total)}</span>
+                  </h3>
+                  <ul className={board.nestedList} aria-labelledby={`${headingId}-${state}`}>
+                    {rows.map((item) => {
+                      const title = threadName(item);
+                      const state = threadState(item);
+                      const date = formatThreadDate(item.createdAt, now);
+                      const summary = threadSummary(item);
+                      const since = elapsed(item.stateSince ?? item.updatedAt, now);
+                      const pr = item.pullRequest;
+                      const details = [title, boardLabels[state], summary, item.branch, date?.full].filter(Boolean).join(' · ');
+                      return (
+                        <li key={item.id}>
+                          <button
+                            type="button"
+                            data-thread-row=""
+                            aria-current={item.id === activeId ? 'page' : undefined}
+                            tabIndex={item.id === tabId ? 0 : -1}
+                            className="extendo-chrome-thread-row"
+                            title={details}
+                            aria-label={details}
+                            onFocus={() => setFocusedId(item.id)}
+                            onClick={() => onSelect(item.id)}
+                          >
+                            <span className={board.boardDot} data-state={state} aria-hidden="true" />
+                            <span className="extendo-chrome-thread-label">
+                              <bdi className="extendo-chrome-ellipsis extendo-chrome-thread-title">{title}</bdi>
+                              <span className="extendo-chrome-thread-meta">
+                                <span>{summary ?? boardLabels[state]}</span>
+                                {since && state !== 'idle' && <><span className="extendo-chrome-meta-dot">·</span><span>{since}</span></>}
+                                {!since && date && <><span className="extendo-chrome-meta-dot">·</span>
+                                  <time dateTime={item.createdAt} title={date.full}>{date.short}</time></>}
+                              </span>
+                            </span>
+                            {pr && <span className={board.rowPull} title={`#${pr.number} · ${pr.merged ? 'merged' : pr.checks}`}>
+                              {pr.merged ? <Merge size={11} aria-hidden="true" />
+                                : pr.checks === 'passing' ? <CircleCheck size={11} aria-hidden="true" />
+                                : pr.checks === 'failing' ? <CircleX size={11} aria-hidden="true" />
+                                : <Clock3 size={11} aria-hidden="true" />}
+                              #{pr.number}
+                            </span>}
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
                 </li>
               );
             })}
@@ -454,7 +487,8 @@ function ThreadList({
 }
 
 export function Shell({
-  projects, threads, projectId, thread, providerLabel, loading, rightOpen, onToggleRight,
+  projects, threads, providers, selection, onSelectModel,
+  projectId, thread, providerLabel, loading, now, rightOpen, onToggleRight,
   onSelectProject, onSelectThread, onNewThread, onOpenProject, onOpenPalette, onOpenSettings,
   children, rail, labels: overrides, usageLabel,
 }: ShellProps) {
@@ -577,6 +611,7 @@ export function Shell({
           activeId={thread?.id}
           loading={loading}
           labels={labels}
+          now={now}
           searchRef={searchRef}
           onSelect={id => { closeNav(); onSelectThread(id); }}
         />
@@ -590,12 +625,16 @@ export function Shell({
           >
             <span className="extendo-chrome-settings-leading"><Icon icon={Settings} size={16} /></span>
             <span className="extendo-chrome-action-label extendo-chrome-ellipsis" dir="auto">{labels.settings}</span>
-            {provider && <span className="extendo-chrome-provider extendo-chrome-ellipsis" dir="auto">{provider}</span>}
           </button>
+          <ModelPicker providers={providers} selection={selection} onSelect={(next) => {
+            onSelectModel(next.provider, next.model);
+            closeNav();
+          }} />
         </div>
       </aside>
       <div className="extendo-chrome-workspace">
         <header className="extendo-chrome-header" inert={navModal || railModal ? true : undefined}>
+          <div className="extendo-chrome-header-inner">
           <button
             className="extendo-chrome-icon-button extendo-chrome-mobile-nav"
             type="button"
@@ -610,6 +649,15 @@ export function Shell({
           </button>
           <div className="extendo-chrome-context">
             <h1 className="extendo-chrome-ellipsis" title={title} dir="auto">{title}</h1>
+            {thread && (() => {
+              const state = threadState(thread);
+              const since = elapsed(thread.stateSince ?? thread.updatedAt, now);
+              return <span className="extendo-chrome-runstate" data-state={state}>
+                <span className={board.boardDot} data-state={state} aria-hidden="true" />
+                <span>{boardLabels[state]}</span>
+                {since && <span className="extendo-chrome-elapsed">{since}</span>}
+              </span>;
+            })()}
             {branch && <span className="extendo-chrome-branch extendo-chrome-head-item" title={branch}>
               <Icon icon={GitBranch} size={13} />
               <bdi className="extendo-chrome-ellipsis extendo-chrome-mono">{branch}</bdi>
@@ -630,12 +678,6 @@ export function Shell({
               </span>
             )}
             {usageLabel?.trim() && <span className="extendo-chrome-usage extendo-chrome-head-item extendo-chrome-mono extendo-chrome-ellipsis" title={usageLabel}>{usageLabel}</span>}
-            {thread && (
-              <span className="extendo-chrome-header-status" role="status" title={statusLabels[thread.status]}>
-                <StatusDot status={thread.status} />
-                <span>{statusLabels[thread.status]}</span>
-              </span>
-            )}
             <button
               className="extendo-chrome-icon-button extendo-chrome-rail-toggle"
               type="button"
@@ -648,6 +690,7 @@ export function Shell({
             >
               <Icon icon={PanelRight} size={17} />
             </button>
+          </div>
           </div>
         </header>
         <div className="extendo-chrome-stage">

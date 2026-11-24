@@ -6,6 +6,7 @@ import { HTTPException } from 'hono/http-exception';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { z } from 'zod';
 import type { Runtime } from './runtime.js';
+import { renderPreview } from './preview.js';
 
 const selection = z.string().trim().min(1).max(256);
 const title = z.string().trim().min(1).max(240);
@@ -74,7 +75,7 @@ export function createHttpApp(runtime: Runtime, options: HttpOptions = {}): Hono
     try { return c.json(workspace.openProject(input.path, input.name), 201); }
     catch { return c.json({ error: 'That local directory could not be opened' }, 400); }
   });
-  app.get('/api/threads', (c) => c.json(workspace.threads(agent, c.req.query('projectId'))));
+  app.get('/api/threads', async (c) => c.json(await runtime.viewer.list(c.req.query('projectId'))));
   app.post('/api/threads', async (c) => {
     const input = await body(() => c.req.json(), threadInput);
     const project = input.projectId ? workspace.project(input.projectId) : workspace.projects()[0];
@@ -83,7 +84,8 @@ export function createHttpApp(runtime: Runtime, options: HttpOptions = {}): Hono
     const provider = input.provider ?? settings.provider;
     try {
       const model = runtime.model(provider, input.model ?? (settings.provider === provider ? settings.model : undefined));
-      return c.json(workspace.createThread(sessions, project, { ...model, title: input.title ?? 'New thread' }), 201);
+      const created = workspace.createThread(sessions, project, { ...model, title: input.title ?? 'New thread' });
+      return c.json(await runtime.viewer.get(created.sessionId), 201);
     } catch (error) {
       return c.json({ error: error instanceof Error ? error.message : 'Could not create thread' }, 400);
     }
@@ -107,6 +109,15 @@ export function createHttpApp(runtime: Runtime, options: HttpOptions = {}): Hono
     return c.json(workspace.saveSettings(input));
   });
 
+  app.get('/api/preview/:sessionId', (c) => {
+    const sessionId = c.req.param('sessionId');
+    const thread = workspace.threadBySession(sessionId);
+    if (!thread) return c.text('Unknown thread', 404);
+    c.header('X-Frame-Options', 'SAMEORIGIN');
+    c.header('Content-Security-Policy', "frame-ancestors 'self'");
+    const theme = c.req.query('theme');
+    return c.html(renderPreview(thread, sessions.replay(sessionId), theme === 'light' || theme === 'dark' ? theme : undefined));
+  });
   app.all('/api/*', (c) => c.json({ error: 'Unknown API route' }, 404));
   if (options.webRoot) {
     app.use('/assets/*', serveStatic({ root: options.webRoot }));

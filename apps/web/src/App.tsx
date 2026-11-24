@@ -4,7 +4,9 @@ import type { AgentStatus, ApprovalDecision, Project, ProviderInfo, Settings, Th
 import { api, json } from './api';
 import { ChatSurface } from './chat';
 import { Shell } from './chrome';
-import { CommandPalette, Inspector, OpenProjectDialog, SettingsDialog } from './studio';
+import { RunBar } from './console/threadHeader';
+import { useNow } from './console/useNow';
+import { CommandPalette, Inspector, OpenProjectDialog, SettingsDialog, type InspectorTab } from './studio';
 import { stressData, stressMode } from './stress';
 import { useSession } from './useSession';
 
@@ -41,6 +43,9 @@ export function App() {
   const [preferences, setPreferences] = useState(false);
   const [openProject, setOpenProject] = useState(false);
   const [inspector, setInspector] = useState(() => window.matchMedia('(min-width: 1101px)').matches);
+  const [panelTab, setPanelTab] = useState<InspectorTab>('Overview');
+  const [merging, setMerging] = useState(false);
+  const now = useNow(1000);
   const [theme, setTheme] = useState(initialTheme);
   const fixture = useMemo(() => stressMode && stressMode !== 'demo' ? stressData(stressMode) : undefined, []);
   const projects = fixture?.projects ?? data.projects;
@@ -57,8 +62,15 @@ export function App() {
       threads: current.threads.map((item) => item.sessionId === sessionId && item.status !== status ? { ...item, status } : item),
     }));
   }, []);
-  const { view, socket } = useSession(thread?.sessionId, setThreadStatus, Boolean(fixture));
+  const onThread = useCallback((snapshot: Thread) => {
+    setData((current) => ({
+      ...current,
+      threads: current.threads.map((item) => item.id === snapshot.id ? { ...item, ...snapshot } : item),
+    }));
+  }, []);
+  const { view, socket } = useSession(thread?.sessionId, setThreadStatus, onThread, Boolean(fixture));
   const status = view.status ?? thread?.status ?? 'idle';
+  const waitingSubagents = thread?.subagents?.filter(({ state }) => state === 'waiting-approval').length ?? 0;
   const messages = fixture?.messages ?? view.messages;
   const tokenLabel = view.tokens ? new Intl.NumberFormat().format(view.tokens) + ' tokens' : undefined;
   const usageLabel = selection.provider === 'demo' ? [tokenLabel, '$0.00'].filter(Boolean).join(' · ') : tokenLabel;
@@ -153,6 +165,42 @@ export function App() {
     setData((current) => ({ ...current, threads: current.threads.map((item) => item.id === thread.id
       ? { ...item, provider: selection.provider, model: selection.model ?? provider?.model ?? selection.provider } : item) }));
   };
+  const steerSubagent = async (subagentId: string, message: string) => {
+    if (!thread || !socket.current) throw new Error('Reconnect before steering.');
+    const result = await socket.current.call('subagent-steer', { sessionId: thread.sessionId, subagentId, message });
+    if (!result.steered) throw new Error('That subagent is no longer running.');
+  };
+  const stopSubagent = async (subagentId: string) => {
+    if (!thread || !socket.current) throw new Error('Reconnect before stopping a subagent.');
+    await socket.current.call('subagent-stop', { sessionId: thread.sessionId, subagentId });
+  };
+  const mergePullRequest = async () => {
+    if (!thread || !socket.current) return;
+    setMerging(true);
+    setNotice(undefined);
+    try {
+      const result = await socket.current.call('pull-request-merge', { sessionId: thread.sessionId });
+      if (result.pullRequest) onThread({ ...thread, pullRequest: result.pullRequest });
+    } catch (error) {
+      setNotice(message(error));
+    } finally {
+      setMerging(false);
+    }
+  };
+  const togglePreview = () => {
+    if (thread?.preview) {
+      setPanelTab('Preview');
+      setInspector(true);
+      return;
+    }
+    toggleInspector();
+    setPanelTab('Overview');
+  };
+  const answerFor = async (sessionId: string, requestId: string, decision: ApprovalDecision) => {
+    if (!socket.current) throw new Error('Reconnect before answering.');
+    const result = await socket.current.call('answer-approval', { sessionId, requestId, decision });
+    if (!result.accepted) throw new Error('That approval request is no longer pending.');
+  };
   const answer = async (requestId: string, decision: ApprovalDecision) => {
     if (!thread || !socket.current) throw new Error('Reconnect before answering.');
     const result = await socket.current.call('answer-approval', { sessionId: thread.sessionId, requestId, decision });
@@ -160,18 +208,27 @@ export function App() {
   };
 
   return <>
-    <Shell projects={projects} threads={threads} projectId={project?.id} thread={thread} providerLabel={providerLabel}
-      loading={isLoading} rightOpen={inspector} onToggleRight={toggleInspector} usageLabel={thread ? usageLabel : undefined}
+    <Shell projects={projects} threads={threads} providers={data.providers} selection={selection}
+      onSelectModel={(next, model) => setForcedProvider({ provider: next, model })}
+      projectId={project?.id} thread={thread} providerLabel={providerLabel}
+      loading={isLoading} now={now} rightOpen={inspector} onToggleRight={toggleInspector} usageLabel={thread ? usageLabel : undefined}
       onSelectProject={(id) => { setActiveProject(id); setActiveThread(undefined); setForcedProvider(undefined); setNotice(undefined); }}
       onSelectThread={selectThread} onNewThread={() => { void createThread(); }} onOpenProject={() => setOpenProject(true)}
       onOpenPalette={() => setPalette(true)} onOpenSettings={() => setPreferences(true)} labels={fixture?.labels}
-      rail={<Inspector key={thread?.id} thread={thread} status={status} messages={messages} onClose={toggleInspector} />}>
+      rail={<Inspector key={thread?.id} thread={thread} status={status} messages={messages} now={now}
+        tab={panelTab} onTabChange={setPanelTab} onClose={toggleInspector}
+        onSteer={steerSubagent} onStop={stopSubagent} onApproval={answerFor} />}>
       <div className="extendo-main">
         {notice && <div className="extendo-notice" role="alert"><CircleAlert size={14} aria-hidden="true" />{notice}<button type="button" onClick={() => setNotice(undefined)}>Dismiss</button></div>}
+        {thread && <RunBar thread={thread} previewOpen={inspector && panelTab === 'Preview'}
+          merging={merging} onMerge={() => { void mergePullRequest(); }} onTogglePreview={togglePreview} />}
         {thread || isLoading ? (
           <ChatSurface key={thread?.id ?? 'loading'} title={thread?.title} messages={messages} draft={view.draft} approvals={view.approvals} status={status}
             loading={isLoading || (!fixture && view.loading)} error={view.error} providerLabel={providerLabel} connected={connected}
             needsProvider={Boolean(thread && !provider?.configured)} onSend={send} onCancel={cancelTurn} onApproval={answer}
+            subagents={thread?.subagents ?? []} waitingSubagents={waitingSubagents}
+            onOpenSubagents={() => { setPanelTab('Subagents'); setInspector(true); }}
+            onSubagentApproval={answerFor}
             onOpenSettings={() => setPreferences(true)} onOpenPalette={() => setPalette(true)}
             onSelectDemo={() => setForcedProvider({ provider: 'demo', model: sampleProvider.model })} suggestions={suggestions} />
         ) : (

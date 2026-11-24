@@ -4,13 +4,18 @@ import {
   ChevronRight, Circle, CircleCheck, CircleDot, CircleX, FileCode2, FilePenLine,
   FileSearch, FlaskConical, PanelRight, SquareTerminal, Wrench, X,
 } from 'lucide-react';
-import type { AgentStatus, JsonValue, Message, Thread } from '@extendo/contracts';
+import type { AgentStatus, ApprovalDecision, JsonValue, Message, Thread } from '@extendo/contracts';
+import { boardLabels } from '../console/board';
+import { humanizeTool } from '../chat/messages';
+import { PreviewPane } from '../console/preview';
+import { SubagentsPanel } from '../console/subagents';
+import board from '../console/console.module.css';
 import styles from './inspector.module.css';
 
 const DiffView = lazy(() => import('../chat/diff'));
 
-const tabs = ['Overview', 'Changes', 'Terminal'] as const;
-type Tab = typeof tabs[number];
+const tabs = ['Overview', 'Subagents', 'Changes', 'Terminal', 'Preview'] as const;
+export type InspectorTab = typeof tabs[number];
 type WorkState = 'done' | 'running' | 'failed' | 'queued';
 type ToolKind = 'read' | 'edit' | 'test' | 'shell' | 'other';
 type ToolEntry = Extract<Message, { role: 'assistant' }>['tools'][number];
@@ -241,9 +246,25 @@ function Terminal({ activity }: { activity: Activity[] }) {
 }
 
 export function Inspector({
-  thread, messages, status, onClose,
-}: { thread?: Thread; messages: Message[]; status: AgentStatus; onClose: () => void }) {
-  const [tab, setTab] = useState<Tab>('Overview');
+  thread, messages, status, now, tab: controlled, onTabChange, onClose, onSteer, onStop, onApproval,
+}: {
+  thread?: Thread;
+  messages: Message[];
+  status: AgentStatus;
+  now: number;
+  tab?: InspectorTab;
+  onTabChange?: (tab: InspectorTab) => void;
+  onClose: () => void;
+  onSteer: (subagentId: string, message: string) => Promise<void>;
+  onStop: (subagentId: string) => Promise<void>;
+  onApproval: (sessionId: string, requestId: string, decision: ApprovalDecision) => Promise<void>;
+}) {
+  const [ownTab, setTab] = useState<InspectorTab>('Overview');
+  const tab = controlled ?? ownTab;
+  const selectTab = (next: InspectorTab) => {
+    setTab(next);
+    onTabChange?.(next);
+  };
   const [opened, setOpened] = useState<{ threadId?: string; path: string }>();
   const baseId = useId();
   const openedButton = useRef<HTMLButtonElement>(null);
@@ -269,8 +290,15 @@ export function Inspector({
     }
     const changes = changesFor(activity);
     const plan = planFor(recentMessages, recent);
+    const state = thread?.state;
+    if (plan.length && (state === 'working' || state === 'failed')) {
+      const last = plan.at(-1);
+      if (last && last.state !== 'failed' && last.state !== 'running') {
+        plan[plan.length - 1] = { ...last, state: state === 'failed' ? 'failed' : 'running' };
+      }
+    }
     return { activity, changes, plan };
-  }, [messages, status]);
+  }, [messages, status, thread?.state]);
   const selectChange = (path: string) => {
     focusChange.current = true;
     setOpened({ threadId: thread?.id, path });
@@ -297,14 +325,19 @@ export function Inspector({
       {tabs.map((name, index) => <button
         key={name} type="button" role="tab" id={`${baseId}-${name}-tab`}
         aria-selected={tab === name} aria-controls={`${baseId}-${name}`} tabIndex={tab === name ? 0 : -1}
-        onClick={() => setTab(name)} onKeyDown={(event) => navigateTabs(event, index)}
-      >{name}{name === 'Changes' && data.changes.length > 0 && <span>{formatNumber.format(data.changes.length)}</span>}</button>)}
+        onClick={() => selectTab(name)} onKeyDown={(event) => navigateTabs(event, index)}
+      >{name}</button>)}
     </div>
     {tabs.map((name) => <div key={name} id={`${baseId}-${name}`} role="tabpanel"
       aria-labelledby={`${baseId}-${name}-tab`} className={styles.panel} hidden={tab !== name} tabIndex={0}>
-      {tab === name && (!thread ? <p className={styles.empty}>Open a thread to inspect its work.</p>
+      {tab === name && (!thread && name !== 'Preview' ? <p className={styles.empty}>Open a thread to inspect its work.</p>
+        : name === 'Subagents' ? <SubagentsPanel thread={thread} now={now} onSteer={onSteer} onStop={onStop} onApproval={onApproval} />
+        : name === 'Preview' ? <PreviewPane thread={thread} now={now} />
+        : !thread ? <p className={styles.empty}>Open a thread to inspect its work.</p>
         : name === 'Overview' ? <>
-          <div className={styles.sessionState} data-status={status}><span aria-hidden="true" />{statusLabel[status]}</div>
+          <div className={styles.sessionState}>
+            <span className={board.boardDot} data-state={thread.state} aria-hidden="true" />
+            {thread.state ? boardLabels[thread.state] : statusLabel[status]}</div>
           <Section title="Plan" meta={data.plan.length ? `${formatNumber.format(data.plan.filter((item) => item.state === 'done').length)} of ${formatNumber.format(data.plan.length)}` : undefined}>
             {data.plan.length ? <ol className={styles.plan}>
               {data.plan.map((item, index) => <li key={index}><StateIcon state={item.state} /><span dir="auto">{item.text}</span></li>)}
@@ -317,7 +350,10 @@ export function Inspector({
                   <FileRow {...change} />
                 </button>
               </li>)}
-            </ul> : <p className={styles.empty}>No file changes yet.</p>}
+            </ul> : thread.pullRequest ? <p className={styles.empty}>
+              The pull request on {thread.pullRequest.branch} carries {formatNumber.format(thread.pullRequest.changedFiles)} files,
+              {' '}+{formatNumber.format(thread.pullRequest.additions)} −{formatNumber.format(thread.pullRequest.deletions)}. Tool-level diffs appear here as this session edits files.
+            </p> : <p className={styles.empty}>No file changes yet.</p>}
           </Section>
           <Section title="Activity">
             {data.activity.length ? <ul className={styles.activity}>
@@ -326,7 +362,7 @@ export function Inspector({
                 return <li key={item.call.id}>
                   <span className={styles.activityIcon}><Icon size={14} /></span>
                   <div><div className={styles.activityTitle}>{item.kind === 'other' ? item.call.name
-                    : item.call.name === 'demo_edit' ? 'Preview edit' : item.call.name === 'demo_test' ? 'Run demo checks' : title}</div>
+                    : item.call.name === 'demo_edit' ? 'Preview edit' : item.call.name === 'demo_check' ? 'Run demo checks' : title}</div>
                     {item.target && <code title={item.target} dir="auto">{item.target}</code>}
                   </div>
                   <StateIcon state={item.state} />

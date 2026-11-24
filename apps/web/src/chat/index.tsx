@@ -1,6 +1,6 @@
 import { ArrowDown, CircleAlert, Plug, Terminal } from 'lucide-react';
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { AgentStatus, ApprovalDecision, ApprovalRequest, Message } from '@extendo/contracts';
+import type { AgentStatus, ApprovalDecision, ApprovalRequest, Message, Subagent } from '@extendo/contracts';
 import { Composer } from './composer';
 import { AssistantStep, ToolCard } from './messages';
 import styles from './chat.module.css';
@@ -16,6 +16,10 @@ interface ChatSurfaceProps {
   providerLabel: string;
   needsProvider?: boolean;
   connected: boolean;
+  subagents: Subagent[];
+  waitingSubagents: number;
+  onOpenSubagents: () => void;
+  onSubagentApproval: (sessionId: string, requestId: string, decision: ApprovalDecision) => Promise<void>;
   onSend: (text: string) => Promise<void>;
   onCancel: () => void;
   onApproval: (id: string, decision: ApprovalDecision) => Promise<void>;
@@ -27,13 +31,15 @@ interface ChatSurfaceProps {
 
 export function ChatSurface({
   title, messages, draft, approvals, status, loading, error, providerLabel, needsProvider = false,
-  connected, onSend, onCancel, onApproval, onOpenSettings, onOpenPalette, onSelectDemo, suggestions,
+  connected, subagents, waitingSubagents, onOpenSubagents, onSubagentApproval,
+  onSend, onCancel, onApproval, onOpenSettings, onOpenPalette, onSelectDemo, suggestions,
 }: ChatSurfaceProps) {
   const scroll = useRef<HTMLDivElement>(null);
   const following = useRef(true);
   const [away, setAway] = useState(false);
   const [suggestion, setSuggestion] = useState<{ text: string }>();
   const running = status === 'working' || status === 'waiting' || approvals.length > 0;
+  const steering = status === 'working' && approvals.length === 0;
   const loadingEmpty = loading && !messages.length && !draft && !approvals.length;
   const approvalsByStep = useMemo(() => {
     const steps = new Map<string, Map<string, ApprovalRequest>>();
@@ -117,6 +123,9 @@ export function ChatSurface({
                       approvalByCall={messageApprovals}
                       onApproval={onApproval}
                       connected={connected}
+                      subagents={subagents}
+                      onOpenSubagents={onOpenSubagents}
+                      onSubagentApproval={onSubagentApproval}
                     />
                   );
                 })}
@@ -173,11 +182,20 @@ export function ChatSurface({
           ><ArrowDown size={13} aria-hidden="true" /> Jump to latest</button>
         )}
       </div>
+      {waitingSubagents > 0 && (
+        <div className={styles.subagentWaiting} role="alert">
+          <span>
+            {waitingSubagents === 1 ? 'A subagent needs' : `${waitingSubagents} subagents need`} your approval to continue.
+          </span>
+          <button type="button" onClick={onOpenSubagents}>Review</button>
+        </div>
+      )}
       <span role="status" className={styles.srOnly}>
         {approvals.length || status === 'waiting' ? 'Waiting for tool approval' : status === 'working' ? 'Extendo is working' : status === 'failed' ? 'The turn failed' : ''}
       </span>
       <Composer
         running={running}
+        steering={steering}
         waiting={status === 'waiting' || Boolean(approvals.length)}
         loading={loading}
         needsProvider={needsProvider}

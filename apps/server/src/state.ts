@@ -2,11 +2,11 @@ import { randomUUID } from 'node:crypto';
 import { mkdirSync, realpathSync, statSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import type { AgentRuntime } from '@extendo/agent';
 import type { Plugin, Project, Settings, Thread } from '@extendo/contracts';
 import type { SessionStore } from '@extendo/session';
 
-type StoredThread = Omit<Thread, 'status'>;
+/** A stored thread before the console derives its state, swarm, and pull request. */
+export type ThreadRow = Omit<Thread, 'status' | 'state' | 'stateSince' | 'subagents' | 'pullRequest' | 'preview'>;
 
 export class WorkspaceState {
   private readonly db: DatabaseSync;
@@ -47,24 +47,24 @@ export class WorkspaceState {
     return project;
   }
 
-  threads(agent: AgentRuntime, projectId?: string): Thread[] {
+  threads(projectId?: string): ThreadRow[] {
     const records = projectId
-      ? this.db.prepare('SELECT * FROM threads WHERE projectId = ? ORDER BY rowid DESC').all(projectId)
-      : this.db.prepare('SELECT * FROM threads ORDER BY rowid DESC').all();
-    return (records as unknown as StoredThread[]).map((row) => ({ ...row, branch: row.branch ?? undefined, status: agent.status(row.sessionId) }));
+      ? this.db.prepare('SELECT * FROM threads WHERE projectId = ? ORDER BY rowid').all(projectId)
+      : this.db.prepare('SELECT * FROM threads ORDER BY rowid').all();
+    return (records as unknown as ThreadRow[]).map((row) => ({ ...row, branch: row.branch ?? undefined }));
   }
 
-  threadBySession(agent: AgentRuntime, sessionId: string): Thread | undefined {
-    const row = this.db.prepare('SELECT * FROM threads WHERE sessionId = ?').get(sessionId) as unknown as StoredThread | undefined;
-    return row && { ...row, branch: row.branch ?? undefined, status: agent.status(sessionId) };
+  threadBySession(sessionId: string): ThreadRow | undefined {
+    const row = this.db.prepare('SELECT * FROM threads WHERE sessionId = ?').get(sessionId) as unknown as ThreadRow | undefined;
+    return row && { ...row, branch: row.branch ?? undefined };
   }
 
-  createThread(sessions: SessionStore, project: Project, input: { title: string; provider: string; model: string; branch?: string }): Thread {
+  createThread(sessions: SessionStore, project: Project, input: { title: string; provider: string; model: string; branch?: string }): ThreadRow {
     const session = sessions.create({ title: input.title, cwd: project.path });
     const thread = { ...input, id: randomUUID(), projectId: project.id, sessionId: session.id, cwd: project.path, createdAt: session.createdAt };
     this.db.prepare('INSERT INTO threads (id, projectId, sessionId, title, cwd, provider, model, createdAt, branch) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
       .run(thread.id, thread.projectId, thread.sessionId, thread.title, thread.cwd, thread.provider, thread.model, thread.createdAt, thread.branch ?? null);
-    return { ...thread, status: 'idle' };
+    return thread;
   }
 
   updateThreadModel(sessionId: string, provider: string, model: string): void {
