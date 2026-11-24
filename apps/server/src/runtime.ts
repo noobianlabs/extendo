@@ -9,6 +9,7 @@ import { sessionPlugin, type SessionStore } from '@extendo/session';
 import { swarmPlugin, type SwarmRuntime } from '@extendo/swarm';
 import { workspaceToolsPlugin } from '@extendo/tools';
 import { demoPullRequests, seedDemo } from './demo.js';
+import { ExtensionWorkshop } from './extensions.js';
 import { previewFor } from './preview.js';
 import { statePlugin, type WorkspaceState } from './state.js';
 import { ThreadViewer } from './threads.js';
@@ -36,6 +37,7 @@ export interface Runtime {
   swarm: SwarmRuntime;
   pullRequests: PullRequestReader;
   viewer: ThreadViewer;
+  extensions: ExtensionWorkshop;
   providers(): ProviderInfo[];
   model(provider: string, model?: string): { provider: string; model: string };
   close(): Promise<void>;
@@ -88,6 +90,8 @@ export async function createRuntime(options: RuntimeOptions = {}): Promise<Runti
     const workspace = ctx.get<WorkspaceState>('workspace');
     const agent = ctx.get<AgentRuntime>('agent');
     const swarm = ctx.get<SwarmRuntime>('swarm');
+    const extensions = new ExtensionWorkshop({ dir: resolve(dataDir, 'plugins'), loader, ctx, logger: options.logger });
+    await extensions.mountInstalled();
 
     if (mode === 'web' && options.seed !== false) seedDemo({ workspace, sessions, dataDir });
     if (options.cwd) workspace.openProject(options.cwd);
@@ -103,7 +107,7 @@ export async function createRuntime(options: RuntimeOptions = {}): Promise<Runti
 
     const viewer = new ThreadViewer({ workspace, sessions, agent, pullRequests, preview: previewFor });
     return {
-      mode, ctx, sessions, workspace, agent, swarm, pullRequests, viewer, providers,
+      mode, ctx, sessions, workspace, agent, swarm, pullRequests, viewer, extensions, providers,
       model(provider, model) {
         const info = providers().find(({ id }) => id === provider);
         if (!info) throw new Error('Unknown provider');

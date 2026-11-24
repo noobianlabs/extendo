@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { setTimeout } from 'node:timers/promises';
-import type { JsonValue, ModelChunk, ModelRequest, Plugin, Provider, Registry, Tool } from '@extendo/contracts';
+import type { JsonValue, ModelChunk, ModelRequest, ModelTool, Plugin, Provider, Registry, Tool } from '@extendo/contracts';
 import { z } from 'zod';
 
 export const demoPath = 'src/search/EmptyState.tsx';
@@ -131,6 +131,67 @@ const summaryScript: Script = {
   ],
 };
 
+/** Tools the demo workspace ships with. Anything else in the request came from a plugin. */
+const builtinTools = new Set(['demo_read', 'demo_search', 'demo_edit', 'demo_check', 'delegate']);
+
+export function pluginTools(tools: readonly ModelTool[]): ModelTool[] {
+  return tools.filter(({ name }) => !builtinTools.has(name));
+}
+
+function truncate(text: string, limit: number): string {
+  return text.length <= limit ? text : text.slice(0, limit - 1) + '…';
+}
+
+function sample(key: string, schema: Record<string, unknown>): JsonValue {
+  const options = schema.enum;
+  if (Array.isArray(options) && options.length) return options[0] as JsonValue;
+  const type = typeof schema.type === 'string' ? schema.type : Array.isArray(schema.type) ? schema.type.find((item) => item !== 'null') : undefined;
+  if (type === 'string') {
+    if (/path|file|dir/i.test(key)) return demoPath;
+    if (/url|link|href/i.test(key)) return 'https://example.test/empty-state';
+    if (/query|search/i.test(key)) return 'No results';
+    if (/name|title|label/i.test(key)) return 'empty state';
+    return 'Extendo is an IDE that builds itself: you write the plugin, and the tool it adds is offered to the agent on the very next turn.';
+  }
+  if (type === 'number' || type === 'integer') return typeof schema.minimum === 'number' ? Math.ceil(schema.minimum) : 1;
+  if (type === 'boolean') return true;
+  if (type === 'array') return [];
+  if (type === 'object') return {};
+  return 'Extendo';
+}
+
+/** Builds a tool input from the JSON Schema the model was offered, so a plugin's own tool can be called. */
+export function synthesizeInput(schema: Record<string, unknown>): JsonValue {
+  const properties = schema.properties;
+  if (!properties || typeof properties !== 'object') return {};
+  const value: Record<string, JsonValue> = {};
+  for (const [key, property] of Object.entries(properties as Record<string, Record<string, unknown>>)) {
+    value[key] = sample(key, property ?? {});
+  }
+  return value;
+}
+
+/**
+ * The turn a plugin makes possible. The demo can only call a tool it was actually offered, so this
+ * path proves the plugin really mounted into the running kernel rather than being described.
+ */
+function pluginScript(tools: readonly ModelTool[], messages: ModelRequest['messages']): Script {
+  const tool = tools[0]!;
+  const settled = messages.findLast((message) => message.role === 'tool');
+  const answer = settled && settled.role === 'tool' ? truncate(JSON.stringify(settled.result.output), 220) : 'nothing yet';
+  return {
+    steps: [
+      {
+        text: `The tool list for this request includes ${tool.name}, which the plugin you saved registered. Calling it.`,
+        call: { name: tool.name, input: synthesizeInput(tool.inputSchema) },
+      },
+      {
+        text: `${tool.name} answered ${answer}. That tool did not exist in Extendo when this thread started: the plugin you saved mounted into the running kernel, and the model was offered it on this request.`,
+      },
+    ],
+  };
+}
+
 /** Picks the scripted turn a session runs, based on the newest thing the person asked for. */
 export function scriptFor(prompt: string): Script {
   const text = prompt.toLowerCase();
@@ -164,7 +225,11 @@ export function demoProvider(options: number | DemoProviderOptions = {}): Provid
     id: 'demo',
     async *stream(request) {
       const { text, index } = latestUser(request.messages);
-      const script = scriptFor(text);
+      const offered = pluginTools(request.tools);
+      const named = offered.find((tool) => new RegExp(`\\b${tool.name.replace(/[^\w]/g, '\\$&')}\\b`, 'i').test(text));
+      const script = offered.length && (named || /\bplugin|extension\b/i.test(text))
+        ? pluginScript(named ? [named, ...offered.filter((tool) => tool !== named)] : offered, request.messages)
+        : scriptFor(text);
       const step = script.steps[Math.min(toolCount(request.messages, index), script.steps.length - 1)]!;
       const steered = steer(request.messages, index);
       const body = steered ? `Following your note — ${steered.trim()} ${step.text}` : step.text;
