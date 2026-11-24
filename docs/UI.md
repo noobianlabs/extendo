@@ -14,6 +14,22 @@ Above the conversation, a state chip, the time in state, the subagent counts, an
 
 Sending while a turn runs steers it; sending while a turn is queued for a subagent queues it. The composer keeps the stop control beside the send control so a person can interrupt or redirect without a mode switch. A tool that needs approval blocks its step until the card in the conversation is answered; a subagent's approval blocks in the same way and is answered from the panel.
 
+## The spine and the seam
+
+The transcript is one column, capped at 720px and centred, with a 1px vertical rule at its left edge: the **spine**. Assistant prose hangs to the right of it, a tool call cuts a notch into it, and a user message interrupts it and then resumes it. Reading a thread is reading the substrate's own history rather than a stack of chat bubbles.
+
+When a tool that an authored plugin registered is called for the first time in a thread, the transcript draws a **seam** above that step: a hairline in the accent colour, drawn out from a mono label that names the plugin and the tool. The seam is derived from the session log and the plugin store, never stored as its own event, so it cannot claim a join the log does not show. Clicking it opens the workshop on that plugin.
+
+Mono type is reserved for anything the kernel registered or measured — tool names, plugin ids, paths, timings, token counts — and Inter for anything a person or the model wrote.
+
+## Workshop
+
+The puzzle control in the header opens the workshop, a docked panel on the right that takes the space the transcript gives up, so both are visible at once: plugin tabs, the source in a CodeMirror editor with one accent for keywords, and a footer with the tools the plugin provides, the mount time, and the revision. Save is `⌘S`; a successful save draws a hairline across the footer and the tool appears in the capability strip. A failed save keeps the previous revision running and shows the error under the editor. Below 1100px the panel takes the whole window.
+
+## Capability strip
+
+Above the composer, the strip names the tools a plugin added and counts the built-in ones. A tool that just mounted springs in from the left. It is the always-visible answer to "what can the agent do in this thread right now".
+
 ## Work panel
 
 Tabs: Overview (plan, changed files, recent activity), Subagents (Running, Waiting on you, Queued, Failed, Stopped, Done, each with role, timing, activity lines with durations, report or error, steer and stop controls), Changes, Terminal, and Preview. Preview iframes the branch's page rendered by `GET /api/preview/:sessionId`.

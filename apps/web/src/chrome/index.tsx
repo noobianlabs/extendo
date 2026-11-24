@@ -1,7 +1,7 @@
 import type { ProviderInfo } from '@extendo/contracts';
 import {
   ChevronLeft, ChevronRight, ChevronsUpDown, CircleCheck, CircleX, Clock3, Command, Cpu, Folder,
-  FolderOpen, GitBranch, Merge, MessagesSquare, PanelLeft, PanelLeftClose, PanelRight, Plus,
+  FolderOpen, GitBranch, Merge, MessagesSquare, PanelLeft, PanelLeftClose, PanelRight, Plus, Puzzle,
   Search, Settings, X, type LucideIcon,
 } from 'lucide-react';
 import {
@@ -44,6 +44,8 @@ export interface ShellProps {
   onOpenProject: () => void;
   onOpenPalette: () => void;
   onOpenSettings: () => void;
+  onOpenWorkshop: () => void;
+  workshopOpen: boolean;
   children: ReactNode;
   rail: ReactNode;
   labels?: Partial<ShellLabels>;
@@ -490,13 +492,14 @@ export function Shell({
   projects, threads, providers, selection, onSelectModel,
   projectId, thread, providerLabel, loading, now, rightOpen, onToggleRight,
   onSelectProject, onSelectThread, onNewThread, onOpenProject, onOpenPalette, onOpenSettings,
+  onOpenWorkshop, workshopOpen,
   children, rail, labels: overrides, usageLabel,
 }: ShellProps) {
   const labels = { ...defaultLabels, ...overrides };
   const [collapsed, setCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const mobile = useMediaQuery('(max-width: 720px)');
-  const railOverlay = useMediaQuery('(max-width: 1060px)');
+  const mobile = useMediaQuery('(max-width: 760px)');
+  const railOverlay = useMediaQuery('(max-width: 1100px)');
   const navModal = mobile && mobileNavOpen;
   const railModal = rightOpen && railOverlay && !navModal;
   const project = projects.find(item => item.id === (projectId ?? thread?.projectId));
@@ -678,6 +681,17 @@ export function Shell({
               </span>
             )}
             {usageLabel?.trim() && <span className="extendo-chrome-usage extendo-chrome-head-item extendo-chrome-mono extendo-chrome-ellipsis" title={usageLabel}>{usageLabel}</span>}
+            <button
+              className="extendo-chrome-icon-button extendo-chrome-workshop-toggle"
+              type="button"
+              title="Workshop · write a plugin"
+              aria-label="Workshop"
+              aria-pressed={workshopOpen}
+              data-testid="open-workshop"
+              onClick={onOpenWorkshop}
+            >
+              <Icon icon={Puzzle} size={17} />
+            </button>
             <button
               className="extendo-chrome-icon-button extendo-chrome-rail-toggle"
               type="button"

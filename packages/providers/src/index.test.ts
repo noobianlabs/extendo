@@ -1,6 +1,6 @@
 import type { ModelChunk, ModelRequest } from '@extendo/contracts';
 import { describe, expect, it } from 'vitest';
-import { anthropicProvider, deepSeekProvider, demoProvider, openAIProvider, providerInfos } from './index.js';
+import { anthropicProvider, deepSeekProvider, demoProvider, fragment, openAIProvider, pluginTools, providerInfos, synthesizeInput } from './index.js';
 
 const request: ModelRequest = {
   model: 'model',
@@ -82,6 +82,94 @@ describe('provider adapters', () => {
     await expect(collect(stream.stream(request))).rejects.toThrow('ended before completion');
     const unavailable = anthropicProvider({ apiKey: 'fixture', fetch: async () => new Response('private response', { status: 403 }) });
     await expect(collect(unavailable.stream(request))).rejects.toThrow(/^Anthropic returned HTTP 403$/);
+  });
+
+  it('calls a plugin tool only when the model was actually offered it', async () => {
+    const plugin = {
+      model: 'model', system: ['System notes'], signal: new AbortController().signal,
+      messages: [{ role: 'user', content: 'Run the word_count plugin tool on this sentence.' }],
+      tools: [{ name: 'word_count', description: 'Count words', inputSchema: { type: 'object', properties: { text: { type: 'string' } } } }],
+    } satisfies ModelRequest;
+    expect(pluginTools(plugin.tools).map(({ name }) => name)).toEqual(['word_count']);
+    expect(await collect(demoProvider(0).stream(plugin))).toContainEqual({
+      type: 'tool-call', call: expect.objectContaining({ name: 'word_count', input: { text: expect.any(String) } }),
+    });
+
+    const unoffered = { ...plugin, tools: [] };
+    expect(await collect(demoProvider(0).stream(unoffered))).not.toContainEqual(
+      expect.objectContaining({ type: 'tool-call', call: expect.objectContaining({ name: 'word_count' }) }),
+    );
+  });
+
+  it('quotes what the plugin tool answered on the following step', async () => {
+    const request: ModelRequest = {
+      model: 'model', system: ['System notes'], signal: new AbortController().signal,
+      tools: [{ name: 'word_count', description: 'Count words', inputSchema: { type: 'object' } }],
+      messages: [
+        { role: 'user', content: 'Run the word_count plugin tool.' },
+        { role: 'assistant', content: 'Calling it.' },
+        { role: 'tool', result: { callId: 'call-1', name: 'word_count', output: { words: 5 }, isError: false } },
+      ],
+    };
+    const output = await collect(demoProvider(0).stream(request));
+    const text = output.flatMap((chunk) => chunk.type === 'text-delta' ? [chunk.delta] : []).join('');
+    expect(text).toContain('{"words": 5}');
+    expect(output).not.toContainEqual(expect.objectContaining({ type: 'tool-call' }));
+  });
+
+  it('never drops a character while streaming, even inside an unbroken run', () => {
+    const payload = 'word_count answered {"words":26,"characters":127,"longest":"Extendo"}. That is all.';
+    expect(fragment(payload).join('')).toBe(payload);
+    expect(fragment(payload, 12).join('')).toBe(payload);
+    expect(fragment('x'.repeat(140), 16).join('')).toBe('x'.repeat(140));
+    expect(fragment('')).toEqual(['']);
+  });
+
+  it('operates on the sentence the person actually asked about', async () => {
+    const request: ModelRequest = {
+      model: 'model', system: [], signal: new AbortController().signal,
+      tools: [{ name: 'word_count', description: 'Count words', inputSchema: { type: 'object', properties: { text: { type: 'string' } } } }],
+      messages: [{ role: 'user', content: 'Use the word_count plugin tool on this sentence: the harness, the editor and the extensions are one substrate.' }],
+    };
+    const output = await collect(demoProvider(0).stream(request));
+    const call = output.find((chunk) => chunk.type === 'tool-call');
+    expect(call).toMatchObject({ call: { name: 'word_count', input: { text: 'the harness, the editor and the extensions are one substrate.' } } });
+  });
+
+  it('reads a JSON payload back as a sentence so it can wrap', async () => {
+    const request: ModelRequest = {
+      model: 'model', system: [], signal: new AbortController().signal,
+      tools: [{ name: 'word_count', description: 'Count words', inputSchema: { type: 'object' } }],
+      messages: [
+        { role: 'user', content: 'Run the word_count plugin tool.' },
+        { role: 'tool', result: { callId: 'call-1', name: 'word_count', output: { words: 10, characters: 62, longest: 'extensions' }, isError: false } },
+      ],
+    };
+    const text = (await collect(demoProvider(0).stream(request)))
+      .flatMap((chunk) => chunk.type === 'text-delta' ? [chunk.delta] : []).join('');
+    expect(text).toContain('`{"words": 10, "characters": 62, "longest": "extensions"}`');
+  });
+
+  it('streams the plugin answer with the payload it was given, intact', async () => {
+    const request: ModelRequest = {
+      model: 'model', system: [], signal: new AbortController().signal,
+      tools: [{ name: 'word_count', description: 'Count words', inputSchema: { type: 'object' } }],
+      messages: [
+        { role: 'user', content: 'Run the word_count plugin tool.' },
+        { role: 'tool', result: { callId: 'call-1', name: 'word_count', output: { words: 26, characters: 127, longest: 'Extendo' }, isError: false } },
+      ],
+    };
+    const text = (await collect(demoProvider(0).stream(request)))
+      .flatMap((chunk) => chunk.type === 'text-delta' ? [chunk.delta] : []).join('');
+    expect(text).toContain('`{"words": 26, "characters": 127, "longest": "Extendo"}`');
+  });
+
+  it('builds a tool input from the schema the model was shown', () => {
+    expect(synthesizeInput({
+      type: 'object',
+      properties: { text: { type: 'string' }, limit: { type: 'integer', minimum: 2 }, path: { type: 'string' }, dry: { type: 'boolean' } },
+    })).toEqual({ text: expect.any(String), limit: 2, path: 'src/search/EmptyState.tsx', dry: true });
+    expect(synthesizeInput({ type: 'object' })).toEqual({});
   });
 
   it('streams the local scripted provider without external credentials', async () => {

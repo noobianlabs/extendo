@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { setTimeout } from 'node:timers/promises';
-import type { JsonValue, ModelChunk, ModelRequest, Plugin, Provider, Registry, Tool } from '@extendo/contracts';
+import type { JsonValue, ModelChunk, ModelRequest, ModelTool, Plugin, Provider, Registry, Tool } from '@extendo/contracts';
 import { z } from 'zod';
 
 export const demoPath = 'src/search/EmptyState.tsx';
@@ -131,6 +131,86 @@ const summaryScript: Script = {
   ],
 };
 
+/** Tools the demo workspace ships with. Anything else in the request came from a plugin. */
+const builtinTools = new Set(['demo_read', 'demo_search', 'demo_edit', 'demo_check', 'delegate']);
+
+export function pluginTools(tools: readonly ModelTool[]): ModelTool[] {
+  return tools.filter(({ name }) => !builtinTools.has(name));
+}
+
+function truncate(text: string, limit: number): string {
+  return text.length <= limit ? text : text.slice(0, limit - 1) + '…';
+}
+
+function sample(key: string, schema: Record<string, unknown>): JsonValue {
+  const options = schema.enum;
+  if (Array.isArray(options) && options.length) return options[0] as JsonValue;
+  const type = typeof schema.type === 'string' ? schema.type : Array.isArray(schema.type) ? schema.type.find((item) => item !== 'null') : undefined;
+  if (type === 'string') {
+    if (/path|file|dir/i.test(key)) return demoPath;
+    if (/url|link|href/i.test(key)) return 'https://example.test/empty-state';
+    if (/query|search/i.test(key)) return 'No results';
+    if (/name|title|label/i.test(key)) return 'empty state';
+    return 'Extendo is an IDE that builds itself: you write the plugin, and the tool it adds is offered to the agent on the very next turn.';
+  }
+  if (type === 'number' || type === 'integer') return typeof schema.minimum === 'number' ? Math.ceil(schema.minimum) : 1;
+  if (type === 'boolean') return true;
+  if (type === 'array') return [];
+  if (type === 'object') return {};
+  return 'Extendo';
+}
+
+/** Builds a tool input from the JSON Schema the model was offered, so a plugin's own tool can be called. */
+export function synthesizeInput(schema: Record<string, unknown>): JsonValue {
+  const properties = schema.properties;
+  if (!properties || typeof properties !== 'object') return {};
+  const value: Record<string, JsonValue> = {};
+  for (const [key, property] of Object.entries(properties as Record<string, Record<string, unknown>>)) {
+    value[key] = sample(key, property ?? {});
+  }
+  return value;
+}
+
+/** The clause after the colon in the newest ask: what the person actually wants operated on. */
+export function quotedSubject(messages: ModelRequest['messages']): string | undefined {
+  const asked = messages.findLast((message) => message.role === 'user');
+  if (!asked || asked.role !== 'user') return undefined;
+  const quoted = asked.content.match(/:\s*([\s\S]+)$/)?.[1]?.trim();
+  return quoted || undefined;
+}
+
+/** Reads a JSON payload back as a sentence, so it wraps instead of breaking mid-token. */
+function readable(value: unknown): string {
+  return JSON.stringify(value).replace(/,"/g, ', "').replace(/":/g, '": ');
+}
+
+/**
+ * The turn a plugin makes possible. The demo can only call a tool it was actually offered, so this
+ * path proves the plugin really mounted into the running kernel rather than being described.
+ */
+function pluginScript(tools: readonly ModelTool[], messages: ModelRequest['messages']): Script {
+  const tool = tools[0]!;
+  const settled = messages.findLast((message) => message.role === 'tool');
+  const answer = settled && settled.role === 'tool' ? truncate(readable(settled.result.output), 220) : 'nothing yet';
+  const subject = quotedSubject(messages);
+  const input = synthesizeInput(tool.inputSchema);
+  if (subject && input && typeof input === 'object' && !Array.isArray(input)) {
+    const key = Object.keys(input).find((name) => typeof (input as Record<string, JsonValue>)[name] === 'string');
+    if (key) (input as Record<string, JsonValue>)[key] = subject;
+  }
+  return {
+    steps: [
+      {
+        text: `The tool list for this request includes ${tool.name}, which the plugin you saved registered. Calling it.`,
+        call: { name: tool.name, input },
+      },
+      {
+        text: `\`${tool.name}\` answered \`${answer}\`. That tool did not exist in Extendo when this thread started: the plugin you saved mounted into the running kernel, and the model was offered it on this request.`,
+      },
+    ],
+  };
+}
+
 /** Picks the scripted turn a session runs, based on the newest thing the person asked for. */
 export function scriptFor(prompt: string): Script {
   const text = prompt.toLowerCase();
@@ -158,19 +238,42 @@ function steer(messages: ModelRequest['messages'], firstIndex: number): string |
   return last.content;
 }
 
+/**
+ * Splits streamed text at word boundaries without ever dropping a character. A regex like
+ * `/.{1,48}(\s|$)/g` looks equivalent but skips any run longer than the window, which silently ate
+ * the first characters of a tool's JSON payload.
+ */
+export function fragment(text: string, size = 48): string[] {
+  const pieces: string[] = [];
+  for (let index = 0; index < text.length;) {
+    let end = Math.min(index + size, text.length);
+    if (end < text.length) {
+      const space = text.lastIndexOf(' ', end);
+      if (space > index) end = space + 1;
+    }
+    pieces.push(text.slice(index, end));
+    index = end;
+  }
+  return pieces.length ? pieces : [''];
+}
+
 export function demoProvider(options: number | DemoProviderOptions = {}): Provider {
   const delay = typeof options === 'number' ? options : options.delay ?? DEFAULT_DELAY;
   return {
     id: 'demo',
     async *stream(request) {
       const { text, index } = latestUser(request.messages);
-      const script = scriptFor(text);
+      const offered = pluginTools(request.tools);
+      const named = offered.find((tool) => new RegExp(`\\b${tool.name.replace(/[^\w]/g, '\\$&')}\\b`, 'i').test(text));
+      const script = offered.length && (named || /\b(?:plugin|extension)s?\b/i.test(text))
+        ? pluginScript(named ? [named, ...offered.filter((tool) => tool !== named)] : offered, request.messages)
+        : scriptFor(text);
       const step = script.steps[Math.min(toolCount(request.messages, index), script.steps.length - 1)]!;
       const steered = steer(request.messages, index);
       const body = steered ? `Following your note — ${steered.trim()} ${step.text}` : step.text;
-      for (const fragment of body.match(/.{1,48}(\s|$)/g) ?? [body]) {
+      for (const piece of fragment(body)) {
         await setTimeout(delay, undefined, { signal: request.signal });
-        yield { type: 'text-delta', delta: fragment } satisfies ModelChunk;
+        yield { type: 'text-delta', delta: piece } satisfies ModelChunk;
       }
       if (step.call) yield { type: 'tool-call', call: { id: randomUUID(), ...step.call } } satisfies ModelChunk;
       yield { type: 'usage', usage: { inputTokens: 148, outputTokens: Math.ceil(body.length / 4) } } satisfies ModelChunk;

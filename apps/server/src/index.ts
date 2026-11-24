@@ -3,6 +3,7 @@ import { createServer, type Server } from 'node:http';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getRequestListener } from '@hono/node-server';
+import { createExtensionApp } from './extensionApi.js';
 import { createHttpApp, type HttpOptions } from './http.js';
 import { resolveOriginPolicy } from './origin.js';
 import { createRuntime, type Runtime, type RuntimeOptions } from './runtime.js';
@@ -37,7 +38,13 @@ export async function startServer(options: ServerOptions = {}): Promise<ExtendoS
   const candidates = [resolve('apps/web/dist'), fileURLToPath(new URL('../../web/dist', import.meta.url))];
   const webRoot = options.webRoot ?? candidates.find((candidate) => existsSync(resolve(candidate, 'index.html')));
   const policy = resolveOriginPolicy(options);
-  const server = createServer(getRequestListener(createHttpApp(runtime, { ...options, webRoot, origin: policy }).fetch));
+  const app = createHttpApp(runtime, { ...options, webRoot, origin: policy });
+  const plugins = createExtensionApp(runtime.extensions, { origin: policy });
+  const server = createServer(getRequestListener((request) => {
+    const { pathname } = new URL(request.url);
+    const authored = pathname === '/api/extensions' || pathname.startsWith('/api/extensions/');
+    return authored ? plugins.fetch(request) : app.fetch(request);
+  }));
   let closeRpc: (() => Promise<void>) | undefined;
   try {
     closeRpc = attachRpc(server, runtime, policy);

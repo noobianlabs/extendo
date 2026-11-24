@@ -381,4 +381,48 @@ export interface CreateProjectRequest { name?: string; path: string }
 export interface CreateThreadRequest { projectId?: string; title?: string; provider?: string; model?: string }
 export interface UpdateSettingsRequest { provider: string; model?: string }
 
+/** A tool a plugin registered, as the workshop and the capability strip describe it. */
+export interface ExtensionToolInfo {
+  name: string;
+  description: string;
+  readOnly: boolean;
+  needsApproval: boolean;
+}
+
+/** One authored plugin: its source, its live state, and the tools it currently provides. */
+export interface Extension {
+  id: string;
+  name: string;
+  description: string;
+  source: string;
+  revision: number;
+  createdAt: string;
+  updatedAt: string;
+  mountedAt?: string;
+  tools: ExtensionToolInfo[];
+  error?: string;
+}
+
+/** An append-only record of a plugin joining the running kernel. */
+export interface ExtensionMount {
+  id: string;
+  at: string;
+  revision: number;
+  tools: string[];
+}
+
+export interface ExtensionState {
+  extensions: Extension[];
+  mounts: ExtensionMount[];
+}
+
+/** A tool the model is offered on the next request, with the plugin that provided it. */
+export interface LiveTool {
+  name: string;
+  description: string;
+  readOnly: boolean;
+  needsApproval: boolean;
+  extensionId?: string;
+}
+
 export * from './derive.js';

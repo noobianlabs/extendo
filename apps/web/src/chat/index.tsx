@@ -1,6 +1,7 @@
 import { ArrowDown, CircleAlert, Plug, Terminal } from 'lucide-react';
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { AgentStatus, ApprovalDecision, ApprovalRequest, Message, Subagent } from '@extendo/contracts';
+import type { AgentStatus, ApprovalDecision, ApprovalRequest, LiveTool, Message, Subagent } from '@extendo/contracts';
+import { CapabilityStrip } from '../workshop';
 import { Composer } from './composer';
 import { AssistantStep, ToolCard } from './messages';
 import styles from './chat.module.css';
@@ -27,13 +28,19 @@ interface ChatSurfaceProps {
   onOpenPalette: () => void;
   onSelectDemo: () => void;
   suggestions?: string[];
+  liveTools?: LiveTool[];
+  pluginTools?: Map<string, string>;
+  pluginCount?: number;
+  onOpenWorkshop?: () => void;
 }
 
 export function ChatSurface({
   title, messages, draft, approvals, status, loading, error, providerLabel, needsProvider = false,
   connected, subagents, waitingSubagents, onOpenSubagents, onSubagentApproval,
   onSend, onCancel, onApproval, onOpenSettings, onOpenPalette, onSelectDemo, suggestions,
+  liveTools = [], pluginTools, pluginCount = 0, onOpenWorkshop = () => {},
 }: ChatSurfaceProps) {
+  const seamed = new Set<string>();
   const scroll = useRef<HTMLDivElement>(null);
   const following = useRef(true);
   const [away, setAway] = useState(false);
@@ -106,6 +113,10 @@ export function ChatSurface({
                   }
                   const previous = timeline[index - 1];
                   const startsReply = previous?.role !== 'assistant' || previous.turnId !== message.turnId;
+                  const joined = message.tools
+                    .map(({ call }) => pluginTools?.get(call.name))
+                    .find((plugin) => plugin && !seamed.has(plugin));
+                  if (joined) seamed.add(joined);
                   const messageApprovals = approvalsByStep.get(message.stepId);
                   if (messageApprovals) {
                     for (const { call } of message.tools) {
@@ -113,6 +124,7 @@ export function ChatSurface({
                       if (request) attachedApprovals.add(request.requestId);
                     }
                   }
+                  const joinedTool = message.tools.find(({ call }) => pluginTools?.get(call.name) === joined)?.call.name;
                   return (
                     <AssistantStep
                       key={message.id}
@@ -126,6 +138,9 @@ export function ChatSurface({
                       subagents={subagents}
                       onOpenSubagents={onOpenSubagents}
                       onSubagentApproval={onSubagentApproval}
+                      seam={joined && joinedTool ? { plugin: joined, tool: joinedTool } : undefined}
+                      pluginTools={pluginTools}
+                      onOpenPlugin={onOpenWorkshop}
                     />
                   );
                 })}
@@ -193,6 +208,7 @@ export function ChatSurface({
       <span role="status" className={styles.srOnly}>
         {approvals.length || status === 'waiting' ? 'Waiting for tool approval' : status === 'working' ? 'Extendo is working' : status === 'failed' ? 'The turn failed' : ''}
       </span>
+      <CapabilityStrip tools={liveTools} plugins={pluginCount} onOpen={onOpenWorkshop} />
       <Composer
         running={running}
         steering={steering}

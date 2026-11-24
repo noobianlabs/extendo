@@ -11,5 +11,5 @@ export default defineConfig({
       }),
     ),
   },
-  test: { include: ['packages/*/src/**/*.test.ts', 'apps/server/src/**/*.test.ts', 'examples/*/src/**/*.test.ts'] },
+  test: { include: ['packages/*/src/**/*.test.ts', 'apps/server/src/**/*.test.ts', 'apps/web/src/**/*.test.ts', 'examples/*/src/**/*.test.ts'] },
 });

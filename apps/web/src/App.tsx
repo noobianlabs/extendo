@@ -1,7 +1,8 @@
 import { CircleAlert, FolderOpen, Terminal } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { AgentStatus, ApprovalDecision, Project, ProviderInfo, Settings, Thread } from '@extendo/contracts';
+import type { AgentStatus, ApprovalDecision, ExtensionState, LiveTool, Project, ProviderInfo, Settings, Thread } from '@extendo/contracts';
 import { api, json } from './api';
+import { createExtension, loadExtensions, pluginToolOwners, removeExtension, saveExtension } from './extensions';
 import { ChatSurface } from './chat';
 import { Shell } from './chrome';
 import { RunBar } from './console/threadHeader';
@@ -9,8 +10,11 @@ import { useNow } from './console/useNow';
 import { CommandPalette, Inspector, OpenProjectDialog, SettingsDialog, type InspectorTab } from './studio';
 import { stressData, stressMode } from './stress';
 import { useSession } from './useSession';
+import { Workshop } from './workshop';
+import './workshop/workshop.css';
 
 const emptySettings: Settings = { provider: 'demo' };
+const emptyExtensions: ExtensionState = { extensions: [], mounts: [] };
 const sampleProvider: ProviderInfo = { id: 'demo', name: 'Demo', model: 'extendo-demo', configured: true };
 const suggestions = [
   'Propose a clearer empty search state',
@@ -45,8 +49,12 @@ export function App() {
   const [inspector, setInspector] = useState(() => window.matchMedia('(min-width: 1101px)').matches);
   const [panelTab, setPanelTab] = useState<InspectorTab>('Overview');
   const [merging, setMerging] = useState(false);
+  const [extensions, setExtensions] = useState<ExtensionState>(emptyExtensions);
+  const [liveTools, setLiveTools] = useState<LiveTool[]>([]);
+  const [workshop, setWorkshop] = useState<{ open: boolean; selected?: string }>({ open: false });
   const now = useNow(1000);
   const [theme, setTheme] = useState(initialTheme);
+  const pluginTools = useMemo(() => pluginToolOwners(extensions), [extensions]);
   const fixture = useMemo(() => stressMode && stressMode !== 'demo' ? stressData(stressMode) : undefined, []);
   const projects = fixture?.projects ?? data.projects;
   const threads = fixture?.threads ?? data.threads;
@@ -76,7 +84,17 @@ export function App() {
   const usageLabel = selection.provider === 'demo' ? [tokenLabel, '$0.00'].filter(Boolean).join(' · ') : tokenLabel;
   const isLoading = !fixture && loading;
   const connected = Boolean(fixture) || (view.connected && !view.loading);
-  const toggleInspector = useCallback(() => setInspector((open) => !open), []);
+  const toggleInspector = useCallback(() => setInspector((open) => {
+    setWorkshop((current) => ({ ...current, open: false }));
+    return !open;
+  }), []);
+
+  const refreshExtensions = useCallback(async () => {
+    const next = await loadExtensions();
+    setExtensions(next.state);
+    setLiveTools(next.tools);
+    return next.state;
+  }, []);
 
   useEffect(() => {
     if (fixture) return;
@@ -87,9 +105,12 @@ export function App() {
     void Promise.all([
       api<Project[]>('/projects', options), api<Thread[]>('/threads', options),
       api<ProviderInfo[]>('/providers', options), api<Settings>('/settings', options),
-    ]).then(([projects, threads, providers, settings]) => {
+      loadExtensions(),
+    ]).then(([projects, threads, providers, settings, plugins]) => {
       if (controller.signal.aborted) return;
       setData({ projects, threads, providers, settings });
+      setExtensions(plugins.state);
+      setLiveTools(plugins.tools);
       setLoading(false);
     }).catch((error: unknown) => {
       if (controller.signal.aborted) return;
@@ -187,6 +208,27 @@ export function App() {
       setMerging(false);
     }
   };
+  const openWorkshop = useCallback((id?: string) => {
+    setWorkshop({ open: true, selected: id });
+    setInspector(false);
+  }, []);
+  const createPlugin = async (name: string) => {
+    const created = await createExtension({ name });
+    setExtensions(created.state);
+    await refreshExtensions();
+    setWorkshop({ open: true, selected: created.extension.id });
+  };
+  const savePlugin = async (id: string, source: string) => {
+    const saved = await saveExtension(id, source);
+    setExtensions(saved.state);
+    await refreshExtensions();
+    return { ok: !saved.extension.error, error: saved.extension.error };
+  };
+  const deletePlugin = async (id: string) => {
+    setExtensions(await removeExtension(id));
+    await refreshExtensions();
+    setWorkshop((current) => ({ ...current, selected: current.selected === id ? undefined : current.selected }));
+  };
   const togglePreview = () => {
     if (thread?.preview) {
       setPanelTab('Preview');
@@ -212,13 +254,15 @@ export function App() {
       onSelectModel={(next, model) => setForcedProvider({ provider: next, model })}
       projectId={project?.id} thread={thread} providerLabel={providerLabel}
       loading={isLoading} now={now} rightOpen={inspector} onToggleRight={toggleInspector} usageLabel={thread ? usageLabel : undefined}
+      onOpenWorkshop={() => openWorkshop()} workshopOpen={workshop.open}
       onSelectProject={(id) => { setActiveProject(id); setActiveThread(undefined); setForcedProvider(undefined); setNotice(undefined); }}
       onSelectThread={selectThread} onNewThread={() => { void createThread(); }} onOpenProject={() => setOpenProject(true)}
       onOpenPalette={() => setPalette(true)} onOpenSettings={() => setPreferences(true)} labels={fixture?.labels}
       rail={<Inspector key={thread?.id} thread={thread} status={status} messages={messages} now={now}
         tab={panelTab} onTabChange={setPanelTab} onClose={toggleInspector}
         onSteer={steerSubagent} onStop={stopSubagent} onApproval={answerFor} />}>
-      <div className="extendo-main">
+      <div className="extendo-main" data-workshop={workshop.open ? 'open' : undefined}
+        style={workshop.open ? { paddingInlineEnd: 'var(--workshop-inset)' } : undefined}>
         {notice && <div className="extendo-notice" role="alert"><CircleAlert size={14} aria-hidden="true" />{notice}<button type="button" onClick={() => setNotice(undefined)}>Dismiss</button></div>}
         {thread && <RunBar thread={thread} previewOpen={inspector && panelTab === 'Preview'}
           merging={merging} onMerge={() => { void mergePullRequest(); }} onTogglePreview={togglePreview} />}
@@ -230,7 +274,9 @@ export function App() {
             onOpenSubagents={() => { setPanelTab('Subagents'); setInspector(true); }}
             onSubagentApproval={answerFor}
             onOpenSettings={() => setPreferences(true)} onOpenPalette={() => setPalette(true)}
-            onSelectDemo={() => setForcedProvider({ provider: 'demo', model: sampleProvider.model })} suggestions={suggestions} />
+            onSelectDemo={() => setForcedProvider({ provider: 'demo', model: sampleProvider.model })} suggestions={suggestions}
+            liveTools={liveTools} pluginTools={pluginTools} pluginCount={extensions.extensions.length}
+            onOpenWorkshop={() => openWorkshop()} />
         ) : (
           <section className="extendo-home" aria-label="Workspace">
             {failure ? <><CircleAlert size={25} /><h1>Can’t reach Extendo</h1><p>{failure}</p><button onClick={() => setReload((value) => value + 1)}>Try again</button></>
@@ -245,9 +291,14 @@ export function App() {
       { id: 'project', title: 'Open project folder', run: () => setOpenProject(true) },
       { id: 'inspector', title: inspector ? 'Hide workspace inspector' : 'Show workspace inspector', description: 'Plan, changes, and terminal', run: toggleInspector },
       { id: 'settings', title: 'Settings', description: 'Model and appearance', run: () => setPreferences(true) },
+      { id: 'workshop', title: 'Open the workshop', description: 'Write a plugin and hot-load it into this session', run: () => openWorkshop() },
     ]} />
     <SettingsDialog open={preferences} settings={data.settings} providers={data.providers} theme={theme} onTheme={setTheme} onSave={saveSettings} onClose={() => setPreferences(false)} />
     <OpenProjectDialog open={openProject} onSave={saveProject} onClose={() => setOpenProject(false)} />
+    <Workshop open={workshop.open} state={extensions} tools={liveTools} selected={workshop.selected}
+      onSelect={(id) => setWorkshop((current) => ({ ...current, selected: id }))}
+      onCreate={createPlugin} onSave={savePlugin} onRemove={deletePlugin}
+      onClose={() => setWorkshop((current) => ({ ...current, open: false }))} />
     {import.meta.env.DEV && stressMode && <nav className="extendo-stress" aria-label="UI test data">
       {[['demo', 'Demo data'], ['worst', 'Worst case'], ['empty', 'Empty'], ['one', 'One']].map(([key, label]) =>
         <a key={key} href={'?data=' + key} aria-current={stressMode === key ? 'page' : undefined}>{label}</a>)}
