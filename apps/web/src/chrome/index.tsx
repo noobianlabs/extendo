@@ -498,8 +498,8 @@ export function Shell({
   const labels = { ...defaultLabels, ...overrides };
   const [collapsed, setCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const mobile = useMediaQuery('(max-width: 720px)');
-  const railOverlay = useMediaQuery('(max-width: 1060px)');
+  const mobile = useMediaQuery('(max-width: 760px)');
+  const railOverlay = useMediaQuery('(max-width: 1100px)');
   const navModal = mobile && mobileNavOpen;
   const railModal = rightOpen && railOverlay && !navModal;
   const project = projects.find(item => item.id === (projectId ?? thread?.projectId));
