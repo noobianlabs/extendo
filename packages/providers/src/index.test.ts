@@ -113,7 +113,7 @@ describe('provider adapters', () => {
     };
     const output = await collect(demoProvider(0).stream(request));
     const text = output.flatMap((chunk) => chunk.type === 'text-delta' ? [chunk.delta] : []).join('');
-    expect(text).toContain('{"words":5}');
+    expect(text).toContain('{"words": 5}');
     expect(output).not.toContainEqual(expect.objectContaining({ type: 'tool-call' }));
   });
 
@@ -123,6 +123,31 @@ describe('provider adapters', () => {
     expect(fragment(payload, 12).join('')).toBe(payload);
     expect(fragment('x'.repeat(140), 16).join('')).toBe('x'.repeat(140));
     expect(fragment('')).toEqual(['']);
+  });
+
+  it('operates on the sentence the person actually asked about', async () => {
+    const request: ModelRequest = {
+      model: 'model', system: [], signal: new AbortController().signal,
+      tools: [{ name: 'word_count', description: 'Count words', inputSchema: { type: 'object', properties: { text: { type: 'string' } } } }],
+      messages: [{ role: 'user', content: 'Use the word_count plugin tool on this sentence: the harness, the editor and the extensions are one substrate.' }],
+    };
+    const output = await collect(demoProvider(0).stream(request));
+    const call = output.find((chunk) => chunk.type === 'tool-call');
+    expect(call).toMatchObject({ call: { name: 'word_count', input: { text: 'the harness, the editor and the extensions are one substrate.' } } });
+  });
+
+  it('reads a JSON payload back as a sentence so it can wrap', async () => {
+    const request: ModelRequest = {
+      model: 'model', system: [], signal: new AbortController().signal,
+      tools: [{ name: 'word_count', description: 'Count words', inputSchema: { type: 'object' } }],
+      messages: [
+        { role: 'user', content: 'Run the word_count plugin tool.' },
+        { role: 'tool', result: { callId: 'call-1', name: 'word_count', output: { words: 10, characters: 62, longest: 'extensions' }, isError: false } },
+      ],
+    };
+    const text = (await collect(demoProvider(0).stream(request)))
+      .flatMap((chunk) => chunk.type === 'text-delta' ? [chunk.delta] : []).join('');
+    expect(text).toContain('`{"words": 10, "characters": 62, "longest": "extensions"}`');
   });
 
   it('streams the plugin answer with the payload it was given, intact', async () => {
@@ -136,7 +161,7 @@ describe('provider adapters', () => {
     };
     const text = (await collect(demoProvider(0).stream(request)))
       .flatMap((chunk) => chunk.type === 'text-delta' ? [chunk.delta] : []).join('');
-    expect(text).toContain('`{"words":26,"characters":127,"longest":"Extendo"}`');
+    expect(text).toContain('`{"words": 26, "characters": 127, "longest": "Extendo"}`');
   });
 
   it('builds a tool input from the schema the model was shown', () => {

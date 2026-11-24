@@ -39,6 +39,8 @@ export async function session(browser, { width = 1440, height = 900, theme = 'da
 }
 
 export async function shot(page, name) {
+  const view = page.viewportSize() ?? { width: 1440, height: 900 };
+  await page.mouse.move(Math.round(view.width * 0.45), Math.round(view.height * 0.6));
   mkdirSync(outDir, { recursive: true });
   const path = join(outDir, name + '.png');
   await page.screenshot({ path });

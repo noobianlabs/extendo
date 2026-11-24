@@ -100,7 +100,8 @@ async function runFlow(page, url, { capture }) {
   await page.keyboard.insertText(SOURCE);
   await beat(500);
   await page.keyboard.press('ControlOrMeta+s');
-  await page.getByTestId('saved').waitFor();
+  await page.waitForFunction(() => /revision\s*2/i.test(document.querySelector('[data-testid="workshop"]')?.textContent ?? ''));
+  await page.waitForFunction(() => document.querySelector('[data-testid="save-plugin"]')?.disabled === true);
   await settle(page, 420);
   await beat(900);
   const revision = await page.locator('[data-testid="workshop"]').innerText();
@@ -118,6 +119,8 @@ async function runFlow(page, url, { capture }) {
   await settle(page, 500);
   const answer = await page.getByRole('region', { name: 'Message history' }).innerText();
   check(answer.includes('{"words":'), 'the tool result reaches the transcript intact, opening brace and all');
+  const asked = PROMPT.split(':').slice(1).join(':').trim();
+  check(answer.includes(`"words": ${asked.split(/\s+/).length}`), 'the tool counted the sentence the person asked about, not a canned one');
   check((await page.getByTestId('plugin-seam').count()) === 1, 'the seam marks where the plugin joined this thread');
   check(/plugin\/word-count joined/.test(await page.getByTestId('plugin-seam').innerText()), 'the seam names the plugin that joined');
   const call = await page.getByText('word_count', { exact: false }).count();

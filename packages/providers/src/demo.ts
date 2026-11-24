@@ -171,6 +171,19 @@ export function synthesizeInput(schema: Record<string, unknown>): JsonValue {
   return value;
 }
 
+/** The clause after the colon in the newest ask: what the person actually wants operated on. */
+export function quotedSubject(messages: ModelRequest['messages']): string | undefined {
+  const asked = messages.findLast((message) => message.role === 'user');
+  if (!asked || asked.role !== 'user') return undefined;
+  const quoted = asked.content.match(/:\s*([\s\S]+)$/)?.[1]?.trim();
+  return quoted || undefined;
+}
+
+/** Reads a JSON payload back as a sentence, so it wraps instead of breaking mid-token. */
+function readable(value: unknown): string {
+  return JSON.stringify(value).replace(/,"/g, ', "').replace(/":/g, '": ');
+}
+
 /**
  * The turn a plugin makes possible. The demo can only call a tool it was actually offered, so this
  * path proves the plugin really mounted into the running kernel rather than being described.
@@ -178,12 +191,18 @@ export function synthesizeInput(schema: Record<string, unknown>): JsonValue {
 function pluginScript(tools: readonly ModelTool[], messages: ModelRequest['messages']): Script {
   const tool = tools[0]!;
   const settled = messages.findLast((message) => message.role === 'tool');
-  const answer = settled && settled.role === 'tool' ? truncate(JSON.stringify(settled.result.output), 220) : 'nothing yet';
+  const answer = settled && settled.role === 'tool' ? truncate(readable(settled.result.output), 220) : 'nothing yet';
+  const subject = quotedSubject(messages);
+  const input = synthesizeInput(tool.inputSchema);
+  if (subject && input && typeof input === 'object' && !Array.isArray(input)) {
+    const key = Object.keys(input).find((name) => typeof (input as Record<string, JsonValue>)[name] === 'string');
+    if (key) (input as Record<string, JsonValue>)[key] = subject;
+  }
   return {
     steps: [
       {
         text: `The tool list for this request includes ${tool.name}, which the plugin you saved registered. Calling it.`,
-        call: { name: tool.name, input: synthesizeInput(tool.inputSchema) },
+        call: { name: tool.name, input },
       },
       {
         text: `\`${tool.name}\` answered \`${answer}\`. That tool did not exist in Extendo when this thread started: the plugin you saved mounted into the running kernel, and the model was offered it on this request.`,
@@ -246,7 +265,7 @@ export function demoProvider(options: number | DemoProviderOptions = {}): Provid
       const { text, index } = latestUser(request.messages);
       const offered = pluginTools(request.tools);
       const named = offered.find((tool) => new RegExp(`\\b${tool.name.replace(/[^\w]/g, '\\$&')}\\b`, 'i').test(text));
-      const script = offered.length && (named || /\bplugin|extension\b/i.test(text))
+      const script = offered.length && (named || /\b(?:plugin|extension)s?\b/i.test(text))
         ? pluginScript(named ? [named, ...offered.filter((tool) => tool !== named)] : offered, request.messages)
         : scriptFor(text);
       const step = script.steps[Math.min(toolCount(request.messages, index), script.steps.length - 1)]!;

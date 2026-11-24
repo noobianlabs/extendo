@@ -334,6 +334,8 @@
   padding: 1px var(--space-1);
   border-radius: var(--radius-sm);
   background: var(--secondary);
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
 }
 
 .prose pre,
@@ -407,6 +409,13 @@
 }
 
 .chat summary { list-style: none; }
+
+.chat :is(.send, .stop, .iconButton, .provider, .quietButton, .primaryButton, .toolSummary) {
+  transition:
+    transform var(--dur-1) var(--ease-out),
+    background-color var(--dur-1) var(--ease-out),
+    color var(--dur-1) var(--ease-out);
+}
 
 .chat :is(.send, .stop, .iconButton, .provider, .quietButton, .primaryButton, .toolSummary):active:not(:disabled) {
   transform: scale(var(--press-scale));

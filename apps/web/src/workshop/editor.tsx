@@ -14,7 +14,7 @@ import styles from './workshop.module.css';
 const highlight = HighlightStyle.define([
   { tag: [tags.keyword, tags.controlKeyword, tags.moduleKeyword, tags.definitionKeyword], color: 'var(--accent)' },
   { tag: [tags.string, tags.special(tags.string), tags.regexp], color: 'var(--text)', opacity: 0.82 },
-  { tag: [tags.comment, tags.lineComment, tags.blockComment], color: 'var(--muted-3)', fontStyle: 'italic' },
+  { tag: [tags.comment, tags.lineComment, tags.blockComment], color: 'var(--muted-2)', fontStyle: 'italic' },
   { tag: [tags.number, tags.bool, tags.null], color: 'var(--muted-1)' },
   { tag: [tags.propertyName, tags.attributeName], color: 'var(--muted-1)' },
   { tag: [tags.function(tags.variableName), tags.function(tags.propertyName)], color: 'var(--text)', fontWeight: '550' },
@@ -26,7 +26,7 @@ const highlight = HighlightStyle.define([
 const theme = EditorView.theme({
   '&': { backgroundColor: 'transparent', color: 'var(--text)', height: '100%', fontSize: '12px' },
   '&.cm-focused': { outline: 'none' },
-  '.cm-scroller': { fontFamily: 'var(--font-mono)', lineHeight: '20px', letterSpacing: '0', overflow: 'auto' },
+  '.cm-scroller': { fontFamily: 'var(--font-mono)', lineHeight: '20px', letterSpacing: '0', overflow: 'auto', scrollbarWidth: 'thin' },
   '.cm-content': { padding: '10px 0 24px', caretColor: 'var(--accent)' },
   '.cm-line': { padding: '0 14px 0 6px' },
   '.cm-gutters': { backgroundColor: 'transparent', color: 'var(--muted-3)', border: 'none', paddingLeft: '6px' },

@@ -65,9 +65,9 @@
 }
 
 .count {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--muted-3);
+  font: var(--type-mono);
+  letter-spacing: var(--track-mono);
+  color: var(--muted-2);
 }
 
 .spacer { flex: 1; }
@@ -240,10 +240,10 @@
 
 .editor { flex: 1; min-width: 0; min-height: 0; height: 100%; }
 .codeFallback {
-  padding: 14px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--muted-3);
+  padding: var(--space-3) var(--space-4);
+  font: var(--type-mono);
+  letter-spacing: var(--track-mono);
+  color: var(--muted-2);
 }
 
 .footer {
@@ -289,19 +289,6 @@
 }
 
 .actions { display: flex; align-items: center; gap: var(--space-1); margin-inline-start: auto; }
-
-.saved {
-  font: var(--type-micro);
-  letter-spacing: var(--track-micro);
-  text-transform: uppercase;
-  color: var(--accent);
-  animation: fadeUp var(--dur-2) var(--ease-out) both;
-}
-
-@keyframes fadeUp {
-  from { opacity: 0; transform: translateY(2px); }
-  to { opacity: 1; transform: none; }
-}
 
 .danger {
   display: grid;
@@ -470,13 +457,14 @@
 
 .toolWhere {
   justify-self: end;
-  font: var(--type-micro);
-  letter-spacing: var(--track-micro);
+  font: var(--type-mono);
+  letter-spacing: var(--track-mono);
   color: var(--muted-2);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 18ch;
+  min-width: 0;
+  max-width: 24ch;
 }
 
 .toolDescription {
@@ -596,12 +584,11 @@
   transition: clip-path var(--dur-3) var(--ease-seam), background-color var(--dur-1) var(--ease-out);
 }
 
-.seamRule[data-side='start'] { flex: none; inline-size: calc(var(--gutter, var(--space-6)) + var(--space-2)); }
+.seamRule[data-side='start'] { flex: none; inline-size: var(--gutter, var(--space-6)); }
 .seamRule[data-side='end'] { transition-delay: 60ms, 0ms; }
 
 @starting-style {
-  .seamRule[data-side='start'] { clip-path: inset(0 100% 0 0); }
-  .seamRule[data-side='end'] { clip-path: inset(0 0 0 100%); }
+  .seamRule { clip-path: inset(0 100% 0 0); }
 }
 
 .seamLabel {
@@ -635,7 +622,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .panel, .content, .create, .saved, .chip, .seamRule, .seamLabel, .sweep, .toolList {
+  .panel, .content, .create, .chip, .seamRule, .seamLabel, .sweep, .toolList {
     animation: none;
     transition-property: opacity, background-color, color, border-color, visibility;
     transform: none;

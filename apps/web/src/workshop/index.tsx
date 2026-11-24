@@ -202,15 +202,13 @@ export function Workshop({ open, state, tools, selected, onSelect, onCreate, onS
             </span>
           </div>
           <div className={styles.actions}>
-            {status === 'saved' && <span key={sweep} className={styles.saved} data-testid="saved">saved</span>}
-            {status === 'saving' && <span className={styles.saved}>saving…</span>}
             <button type="button" className={styles.danger} onClick={() => { void remove(); }} disabled={busy}
               aria-label={`Delete ${current?.name ?? 'plugin'}`}>
               <Trash2 size={13} aria-hidden="true" />
             </button>
             <button type="button" className={styles.save} onClick={() => { void save(); }} disabled={busy || !current || !dirty}
-              data-testid="save-plugin">
-              Save
+              data-testid="save-plugin" data-busy={status === 'saving' || undefined}>
+              {status === 'saving' ? 'Saving…' : 'Save'}
               <kbd className={styles.kbd}>{accelerator}</kbd>
             </button>
           </div>
@@ -261,7 +259,7 @@ export function CapabilityStrip({ tools, onOpen, plugins }: { tools: LiveTool[];
         </button>
         <span className={styles.stripCount}>{builtin} built in</span>
         {authored.length === 0
-          ? <span className={styles.stripMuted}>{plugins === 0 ? 'no plugins yet' : 'no plugin tools loaded'}</span>
+          ? <span className={styles.stripMuted}>· {plugins === 0 ? 'no plugins yet' : 'no plugin tools loaded'}</span>
           : authored.map(({ name, extensionId }) => <button key={name} type="button" className={styles.chip}
             onClick={onOpen} title={`Provided by ${extensionId}`} data-testid={'live-tool-' + name}>
             {name}

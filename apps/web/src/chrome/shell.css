@@ -567,6 +567,11 @@
   background: var(--bg);
 }
 
+.extendo-chrome-header button.extendo-chrome-icon-button[aria-pressed='true'] {
+  background: var(--secondary);
+  color: var(--text);
+}
+
 .extendo-chrome-header-inner {
   display: flex;
   align-items: center;
@@ -943,7 +948,12 @@
     }
   }
 
-  .extendo-chrome-header-inner {
+  .extendo-chrome-header button.extendo-chrome-icon-button[aria-pressed='true'] {
+  background: var(--secondary);
+  color: var(--text);
+}
+
+.extendo-chrome-header-inner {
     gap: var(--space-1);
     padding-inline: 0;
   }
