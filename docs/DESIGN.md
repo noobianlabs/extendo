@@ -95,6 +95,34 @@ at ≤760px the sidebar becomes a sheet behind a 44px header control. The transc
 Breakpoints: 375 (phone), 760 (tablet), 1100 (rail becomes overlay), 1280 (rail always available),
 1440 (workshop and transcript side by side).
 
+## The source surface (v0.4)
+
+The product now shows a repository: the checkout a thread is in, what changed in it, and the way out.
+That surface extends this identity rather than sitting beside it, because a repository's state is the
+substrate's own memory — the strongest case there is for the mono rule.
+
+- **Groups, not cards.** Staged, Changes, and Untracked are three sections separated by hairlines, each
+  with the micro heading and mono count the capability strip already uses. Nothing is boxed, nothing
+  floats, and a row is a row: no per-file card, no rounded tile.
+- **Mono holds every fact git measured.** Branch, upstream, worktree path, short SHA, status letter,
+  line counts, and the ahead/behind pair. Prose is only ever a sentence about them ("The remote has
+  commits this branch does not…"). A count is never written as a sentence when it can be a number.
+- **The status letter is the one coloured glyph in the surface.** `+`/`A`/`?` read in `--success`,
+  `D`/`U` in `--destructive`, `M` neutral. Failure stays a desaturated red hairline and a letter, never
+  a fill, and the accent appears exactly once as a control: the commit button, drawn as an accent
+  hairline rather than a filled button, because the sidebar's New thread is the screen's one filled
+  control.
+- **Truncation is a hierarchy, not an ellipsis.** A path keeps its file name and its last directory
+  segment, with the parent muted; the full path is the row's `title`. Mono is what makes a clipped path
+  legible, and the file name is what a person scans for.
+- **The confirm is where the surface raises its voice.** Every destructive action (discard, remove a
+  worktree, delete a branch, delete a thread) opens a dialog that names the paths and the count, and a
+  destructive button is a hairline in the failure colour with its own verb — never a filled button, and
+  never the default focus.
+- **Nothing is claimed that was not read.** "Not published" instead of an invented upstream, a named
+  explanation instead of a disabled control that lies about why, and a refusal that says which rail it
+  hit. The surface's honesty *is* its design: a status read is the only source it has.
+
 ## Components
 
 - **Controls** are hairline-outlined, 28px tall, 6px radius, no shadow. Hover lifts the background one

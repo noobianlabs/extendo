@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { GitCapabilities, GitRemote, WorkspaceStatus, WorktreeInfo } from './git.js';
 
 export type Disposable = () => void;
 export type Listener<T> = (payload: T) => void | Promise<void>;
@@ -289,6 +290,8 @@ export interface Thread {
   sessionId: string;
   title: string;
   cwd: string;
+  /** The thread's own git worktree, when it runs in one instead of the shared checkout. */
+  worktree?: string;
   provider: string;
   model: string;
   status: AgentStatus;
@@ -426,3 +429,26 @@ export interface LiveTool {
 }
 
 export * from './derive.js';
+export * from './git.js';
+
+/** What the git surface fetches in one round trip: the checkout, its state, and what git can do. */
+export interface GitView {
+  checkout: GitCheckout;
+  status: WorkspaceStatus;
+  worktrees: WorktreeInfo[];
+  capabilities: GitCapabilities;
+}
+
+export interface GitCheckout {
+  /** The directory git commands run in: the thread's worktree, or the project's checkout. */
+  path: string;
+  /** The thread's own worktree, when it runs in one instead of the shared checkout. */
+  worktree?: string;
+  sessionId?: string;
+}
+
+export interface WorktreeView extends GitView {
+  thread: Thread;
+  /** Something that did not finish after the checkout moved, such as deleting its branch. */
+  warning?: string;
+}

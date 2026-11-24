@@ -3,16 +3,22 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
+import { GitService } from '../../packages/git/dist/index.js';
 import { startServer } from '../../apps/server/dist/index.js';
 
 export const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 export const outDir = process.env.EXTENDO_E2E_OUT ?? join(root, 'artifacts');
 
-export async function boot() {
+/** Boots the real server on a throwaway home. `gh` can be pointed at a missing binary to test the honest path. */
+export async function boot({ gh } = {}) {
   const dataDir = mkdtempSync(join(tmpdir(), 'extendo-e2e-'));
-  const server = await startServer({ dataDir, port: 0, env: {}, webRoot: join(root, 'apps/web/dist') });
+  const server = await startServer({
+    dataDir, port: 0, env: {}, webRoot: join(root, 'apps/web/dist'),
+    ...(gh ? { git: new GitService({ gh }) } : {}),
+  });
   return {
     url: server.url,
+    dataDir,
     server,
     async close() {
       await server.close();

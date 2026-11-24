@@ -1,6 +1,7 @@
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { agentPlugin, capabilitiesPlugin, type AgentRuntime } from '@extendo/agent';
+import { GitService } from '@extendo/git';
 import type { Ctx, Logger, Plugin, Provider, ProviderInfo, Registry } from '@extendo/contracts';
 import { Context, PluginLoader, profileEntries, type PluginCatalog, type Profile } from '@extendo/kernel';
 import { demoToolsPlugin, providersPlugin } from '@extendo/providers';
@@ -26,6 +27,7 @@ export interface RuntimeOptions {
   plugins?: PluginCatalog;
   seed?: boolean;
   pullRequests?: PullRequestReader;
+  git?: GitService;
 }
 
 export interface Runtime {
@@ -36,6 +38,7 @@ export interface Runtime {
   agent: AgentRuntime;
   swarm: SwarmRuntime;
   pullRequests: PullRequestReader;
+  git: GitService;
   viewer: ThreadViewer;
   extensions: ExtensionWorkshop;
   providers(): ProviderInfo[];
@@ -93,7 +96,7 @@ export async function createRuntime(options: RuntimeOptions = {}): Promise<Runti
     const extensions = new ExtensionWorkshop({ dir: resolve(dataDir, 'plugins'), loader, ctx, logger: options.logger });
     await extensions.mountInstalled();
 
-    if (mode === 'web' && options.seed !== false) seedDemo({ workspace, sessions, dataDir });
+    if (mode === 'web' && options.seed !== false) await seedDemo({ workspace, sessions, dataDir });
     if (options.cwd) workspace.openProject(options.cwd);
 
     const providers = () => {
@@ -105,9 +108,10 @@ export async function createRuntime(options: RuntimeOptions = {}): Promise<Runti
       ];
     };
 
+    const git = options.git ?? new GitService();
     const viewer = new ThreadViewer({ workspace, sessions, agent, pullRequests, preview: previewFor });
     return {
-      mode, ctx, sessions, workspace, agent, swarm, pullRequests, viewer, extensions, providers,
+      mode, ctx, sessions, workspace, agent, swarm, pullRequests, git, viewer, extensions, providers,
       model(provider, model) {
         const info = providers().find(({ id }) => id === provider);
         if (!info) throw new Error('Unknown provider');

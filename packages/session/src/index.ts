@@ -60,6 +60,22 @@ export class SessionStore {
     return this.db.prepare('SELECT id, title, cwd, createdAt FROM sessions WHERE id = ?').get(sessionId) as Session | undefined;
   }
 
+  /** Points a session at a different checkout, for a thread that moved into its own worktree. */
+  move(sessionId: string, cwd: string): void {
+    const result = this.db.prepare('UPDATE sessions SET cwd = ? WHERE id = ?').run(cwd, sessionId);
+    if (Number(result.changes) === 0) throw new Error(`Unknown session: ${sessionId}`);
+  }
+
+  /** Deletes a session's log and its mirror. Nothing else in the store refers to it. */
+  remove(sessionId: string): void {
+    this.transaction(() => {
+      this.db.prepare('DELETE FROM events WHERE sessionId = ?').run(sessionId);
+      this.db.prepare('DELETE FROM sessions WHERE id = ?').run(sessionId);
+    });
+    this.mirrors.delete(sessionId);
+    rmSync(this.mirrorPath(sessionId), { force: true });
+  }
+
   list(): Session[] {
     return this.db.prepare('SELECT id, title, cwd, createdAt FROM sessions ORDER BY createdAt DESC, rowid DESC').all() as unknown as Session[];
   }

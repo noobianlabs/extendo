@@ -18,6 +18,7 @@
   "dependencies": {
     "@extendo/agent": "workspace:*",
     "@extendo/contracts": "workspace:*",
+    "@extendo/git": "workspace:*",
     "@extendo/kernel": "workspace:*",
     "@extendo/providers": "workspace:*",
     "@extendo/pullrequests": "workspace:*",
