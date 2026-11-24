@@ -1,76 +1,146 @@
-/* Capy artifact base. Lift this whole block into the file's one <style> (scripts/inline.mjs does it), then the skill's own stylesheet under it.
-   Colors resolve in this order: the viewer's Capy theme (the app injects --capy-* on :root and stamps data-theme), then Capy's default palette through light-dark().
-   Values follow packages/web/src/styles/design-tokens.css; the CSS there wins on any drift. */
+@import "@fontsource-variable/inter/opsz.css";
+@import "@fontsource-variable/geist-mono/index.css";
 
 :root {
   color-scheme: light dark;
 
-  --bg: var(--capy-bg, light-dark(#f2f2f4, #09090a));
-  --panel: var(--capy-panel, light-dark(#fafafb, #121213));
-  --card: var(--capy-card, light-dark(#ffffff, #1a1a1b));
-  --card-hover: var(--capy-card-hover, light-dark(#f7f7f8, #1f1f20));
-  --popover: var(--capy-popover, light-dark(#ffffff, #222223));
-  --secondary: var(--capy-secondary, light-dark(rgba(0, 0, 0, 0.05), rgba(255, 255, 255, 0.08)));
-  --section: var(--capy-section, light-dark(rgba(0, 0, 0, 0.035), rgba(255, 255, 255, 0.035)));
-  --popover-hover: light-dark(rgba(0, 0, 0, 0.04), rgba(255, 255, 255, 0.065));
-  --input: var(--capy-input, var(--card));
-  --button: var(--capy-button, light-dark(#ffffff, rgba(255, 255, 255, 0.07)));
-  --button-hover: var(--capy-button-hover, light-dark(#f7f7f8, rgba(255, 255, 255, 0.1)));
-  --fill-strong: light-dark(#e1e1e3, #353537);
-  --overlay: light-dark(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.55));
+  --paper: light-dark(#f4f4f5, #0a0a0b);
+  --surface-1: light-dark(#ececee, #111112);
+  --surface-2: light-dark(#e4e4e7, #18181a);
+  --surface-3: light-dark(#dbdbdf, #1f1f22);
+  --surface-4: light-dark(#d0d0d5, #29292c);
 
-  --text: var(--capy-text, light-dark(#1e1e20, #ebebec));
-  --muted-1: var(--capy-muted-foreground-1, light-dark(#6a6a6f, #a3a3a6));
-  --muted-2: var(--capy-muted-foreground-2, light-dark(#8a8a8e, #7f7f82));
-  --muted-3: var(--capy-muted-foreground-3, light-dark(#a9a9ad, #5d5d60));
-  --icon-muted: var(--capy-icon-muted, light-dark(#8d8d91, #5f5f62));
+  --accent: light-dark(#a9540e, #ee9a3c);
+  --accent-fill: light-dark(#a9540e, #ee9a3c);
+  --accent-fill-hover: light-dark(#974a0b, #f3a955);
+  --accent-ink: light-dark(#ffffff, #0a0a0b);
+  --accent-soft: color-mix(in srgb, var(--accent) 14%, transparent);
+  --accent-line: color-mix(in srgb, var(--accent) 55%, transparent);
 
-  --border-1: var(--capy-border-1, light-dark(rgba(0, 0, 0, 0.08), rgba(255, 255, 255, 0.08)));
-  --border-2: var(--capy-border-2, light-dark(rgba(0, 0, 0, 0.11), rgba(255, 255, 255, 0.12)));
-  --border-3: var(--capy-border-3, light-dark(rgba(0, 0, 0, 0.15), rgba(255, 255, 255, 0.16)));
+  --bg: var(--paper);
+  --panel: var(--paper);
+  --card: var(--surface-1);
+  --card-hover: var(--surface-2);
+  --popover: var(--surface-2);
+  --secondary: light-dark(rgba(24, 24, 32, 0.06), rgba(255, 250, 245, 0.07));
+  --section: light-dark(rgba(24, 24, 32, 0.035), rgba(255, 250, 245, 0.035));
+  --popover-hover: var(--secondary);
+  --inset: light-dark(rgba(24, 24, 32, 0.045), rgba(255, 250, 245, 0.04));
+  --input: var(--inset);
+  --button: transparent;
+  --button-hover: var(--secondary);
+  --fill-strong: var(--surface-4);
+  --overlay: light-dark(rgba(20, 20, 24, 0.32), rgba(0, 0, 0, 0.6));
 
-  --primary: var(--capy-primary, light-dark(#3b5de8, #456af6));
-  --primary-ink: var(--capy-primary-ink, light-dark(#3550d6, #7699fb));
-  --primary-text: var(--capy-primary-text, #ffffff);
-  --primary-soft: color-mix(in srgb, var(--primary) 10%, transparent);
-  --ring: var(--primary);
-  --destructive: var(--capy-destructive, light-dark(#c7332f, #e5534b));
-  --success: var(--capy-success, light-dark(#1f9d3a, #3fb950));
-  --warning: var(--capy-warning-fg, light-dark(#a87f09, #e8c547));
-  --warning-fg: var(--warning);
-  --destructive-soft: color-mix(in srgb, var(--destructive) 18%, transparent);
-  --info: var(--capy-info, light-dark(#0b7fe0, #4aa3f5));
+  --text: light-dark(#18181b, #ededec);
+  --muted-1: light-dark(#55555c, #a3a3a1);
+  --muted-2: light-dark(#76767e, #7a7a7c);
+  --muted-3: light-dark(#9d9da5, #58585b);
+  --icon-muted: var(--muted-2);
 
-  --chart-1: var(--capy-chart-1, var(--primary));
-  --chart-2: var(--capy-chart-2, light-dark(#d2d2d6, #3c3c40));
+  --border-1: light-dark(rgba(24, 24, 32, 0.08), rgba(255, 250, 245, 0.07));
+  --border-2: light-dark(rgba(24, 24, 32, 0.12), rgba(255, 250, 245, 0.11));
+  --border-3: light-dark(rgba(24, 24, 32, 0.18), rgba(255, 250, 245, 0.17));
+  --spine: light-dark(rgba(24, 24, 32, 0.16), rgba(255, 250, 245, 0.15));
+
+  --primary: var(--accent-fill);
+  --primary-ink: var(--accent);
+  --primary-text: var(--accent-ink);
+  --primary-soft: var(--accent-soft);
+  --ring: var(--accent);
+  --destructive: light-dark(#a8463f, #c9706a);
+  --destructive-soft: color-mix(in srgb, var(--destructive) 14%, transparent);
+  --success: light-dark(#3d7a52, #73a985);
+  --warning: var(--accent);
+  --warning-fg: var(--accent);
+  --info: var(--muted-1);
+
+  --chart-1: var(--text);
+  --chart-2: var(--surface-4);
   --chart-grid: var(--border-1);
 
-  --sh-plate: 0 1px 2px light-dark(rgba(0, 0, 0, 0.05), rgba(0, 0, 0, 0.3));
-  --sh-card:
-    0 0 0 0.5px light-dark(rgba(0, 0, 0, 0.1), rgba(255, 255, 255, 0.07)),
-    0 1px 2px light-dark(rgba(0, 0, 0, 0.04), rgba(0, 0, 0, 0.3));
-  --sh-overlay:
-    0 0 0 0.5px var(--border-2), 0 8px 24px light-dark(rgba(0, 0, 0, 0.08), rgba(0, 0, 0, 0.5));
+  --sh-plate: none;
+  --sh-card: inset 0 0 0 var(--hairline) var(--border-2);
+  --sh-overlay: 0 0 0 var(--hairline) var(--border-3);
+  --sh-inset: inset 0 0 0 var(--hairline) var(--border-1), inset 0 1px 0 var(--border-1);
+
+  --font-sans: "Inter Variable", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-mono: "Geist Mono Variable", "Geist Mono", "GeistMono NF", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --type-micro: 560 11px/14px var(--font-mono);
+  --type-caption: 450 12px/16px var(--font-sans);
+  --type-body: 450 13px/20px var(--font-sans);
+  --type-lead: 460 15px/22px var(--font-sans);
+  --type-title: 560 19px/25px var(--font-sans);
+  --type-display: 560 26px/30px var(--font-sans);
+  --type-mono: 450 12px/16px var(--font-mono);
+  --track-micro: 0.06em;
+  --track-caption: -0.005em;
+  --track-body: -0.008em;
+  --track-lead: -0.012em;
+  --track-title: -0.018em;
+  --track-display: -0.028em;
+  --track-mono: 0;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  --hairline: 0.5px;
+  --spine-width: 1px;
+  --control-height: 28px;
+  --row-height: 44px;
+  --header-height: 44px;
+  --sidebar-width: 240px;
+  --sidebar-collapsed: 56px;
+  --rail-width: 320px;
+  --rail-wide: 560px;
+  --transcript-width: 720px;
+  --icon-stroke: 1.65;
 
   --radius-sm: 4px;
   --radius: 6px;
-  --radius-card: 12px;
-  --radius-panel: 12px;
+  --radius-card: 8px;
+  --radius-panel: 8px;
 
-  --font-sans:
-    Inter, "Inter Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial,
-    sans-serif;
-  --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-
-  --ease-out-quint: cubic-bezier(0.23, 1, 0.32, 1);
-  --duration-fast: 150ms;
-  --duration-base: 200ms;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-seam: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-out-quint: var(--ease-out);
+  --dur-press: 100ms;
+  --dur-1: 120ms;
+  --dur-2: 180ms;
+  --dur-3: 260ms;
+  --duration-fast: var(--dur-1);
+  --duration-base: var(--dur-2);
+  --duration-surface: var(--dur-3);
+  --duration-exit: var(--dur-2);
+  --press-scale: 0.97;
+  --enter-scale: 0.96;
+  --popover-origin: top center;
 }
+
 :root[data-theme="light"] {
   color-scheme: light;
 }
+
 :root[data-theme="dark"] {
   color-scheme: dark;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --press-scale: 1;
+    --enter-scale: 1;
+    --dur-2: 120ms;
+    --dur-3: 120ms;
+  }
 }
 
 *,
@@ -78,19 +148,20 @@
 *::after {
   box-sizing: border-box;
 }
+
 html {
   background: var(--bg);
   -webkit-text-size-adjust: 100%;
 }
+
 body {
   margin: 0;
   color: var(--text);
   background: var(--bg);
-  font-family: var(--font-sans);
-  font-size: 16px;
-  line-height: 1.6;
-  font-weight: 450;
-  font-feature-settings: "cv01", "cv05", "cv08", "ss03";
+  font: var(--type-body);
+  letter-spacing: var(--track-body);
+  font-feature-settings: "cv05", "cv08", "cv11", "ss03";
+  font-optical-sizing: auto;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
