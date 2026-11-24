@@ -3,8 +3,8 @@ import { bodyLimit } from 'hono/body-limit';
 import { cors } from 'hono/cors';
 import { HTTPException } from 'hono/http-exception';
 import { z } from 'zod';
-import { allowsLocal } from './http.js';
 import type { ExtensionWorkshop } from './extensions.js';
+import { decideOrigin, isAllowedOrigin, resolveOriginPolicy, type OriginPolicy } from './origin.js';
 
 const source = z.string().min(1).max(64_000);
 const createInput = z.object({
@@ -13,8 +13,6 @@ const createInput = z.object({
   source: source.optional(),
 });
 const saveInput = z.object({ source });
-
-const devDefaults = ['http://127.0.0.1:5173', 'http://localhost:5173'];
 
 async function body<T>(read: () => Promise<unknown>, schema: z.ZodType<T>): Promise<T> {
   let value: unknown;
@@ -29,26 +27,31 @@ async function body<T>(read: () => Promise<unknown>, schema: z.ZodType<T>): Prom
 }
 
 export interface ExtensionApiOptions {
-  devOrigins?: string[];
+  origin?: OriginPolicy;
 }
 
 /**
  * The plugin workshop's HTTP surface. It is its own Hono app, dispatched from the server's request
- * handler before the console app, so it reuses the same local-only guard without changing it.
+ * handler before the console app, so it answers under the same origin policy without changing it.
  */
 export function createExtensionApp(workshop: ExtensionWorkshop, options: ExtensionApiOptions = {}): Hono {
   const app = new Hono();
-  const devOrigins = options.devOrigins ?? devDefaults;
+  const policy = options.origin ?? resolveOriginPolicy();
 
   app.use('*', async (c, next) => {
-    if (!allowsLocal(c.req.header('host') ?? new URL(c.req.url).host, c.req.header('origin'), devOrigins)) {
-      return c.json({ error: 'Only local Extendo clients are allowed' }, 403);
-    }
+    const decision = decideOrigin({
+      host: c.req.header('host') ?? new URL(c.req.url).host,
+      origin: c.req.header('origin'),
+      'x-forwarded-host': c.req.header('x-forwarded-host'),
+      'x-forwarded-proto': c.req.header('x-forwarded-proto'),
+    }, policy);
+    if (!decision.allowed) return c.json({ error: 'This Extendo server does not accept requests from that origin' }, 403);
     c.header('X-Content-Type-Options', 'nosniff');
     c.header('Referrer-Policy', 'no-referrer');
+    c.header('X-Frame-Options', 'DENY');
     await next();
   });
-  app.use('*', cors({ origin: (origin) => devOrigins.includes(origin) ? origin : null, allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], allowHeaders: ['Content-Type'] }));
+  app.use('*', cors({ origin: (origin) => isAllowedOrigin(origin, policy) ? origin : null, allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], allowHeaders: ['Content-Type'] }));
   app.use('*', bodyLimit({
     maxSize: 128 * 1024,
     onError: (c) => c.json({ error: 'Plugin source is too large' }, 413),

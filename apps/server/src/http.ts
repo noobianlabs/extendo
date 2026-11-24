@@ -1,4 +1,3 @@
-import type { IncomingMessage } from 'node:http';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { cors } from 'hono/cors';
@@ -7,6 +6,7 @@ import { serveStatic } from '@hono/node-server/serve-static';
 import { z } from 'zod';
 import type { Runtime } from './runtime.js';
 import { renderPreview } from './preview.js';
+import { decideOrigin, describeOrigin, isAllowedOrigin, resolveOriginPolicy, type OriginPolicy } from './origin.js';
 
 const selection = z.string().trim().min(1).max(256);
 const title = z.string().trim().min(1).max(240);
@@ -29,34 +29,34 @@ async function body<T>(read: () => Promise<unknown>, schema: z.ZodType<T>): Prom
 export interface HttpOptions {
   webRoot?: string;
   devOrigins?: string[];
-}
-
-const devDefaults = ['http://127.0.0.1:5173', 'http://localhost:5173'];
-
-export function allowsLocal(host: string | undefined, origin: string | undefined, allowed = devDefaults): boolean {
-  if (!host || !/^(?:localhost|127\.0\.0\.1|\[::1\])(?::\d{1,5})?$/i.test(host)) return false;
-  return !origin || origin === `http://${host}` || origin === `https://${host}` || allowed.includes(origin);
-}
-
-export function allowsUpgrade(request: IncomingMessage, allowed?: string[]): boolean {
-  return allowsLocal(request.headers.host, request.headers.origin, allowed);
+  allowedOrigins?: string[];
+  trustProxy?: boolean;
+  env?: NodeJS.ProcessEnv;
+  origin?: OriginPolicy;
 }
 
 export function createHttpApp(runtime: Runtime, options: HttpOptions = {}): Hono {
   const app = new Hono();
   const { agent, workspace, sessions } = runtime;
-  const devOrigins = options.devOrigins ?? devDefaults;
+  const policy = options.origin ?? resolveOriginPolicy(options);
 
   app.use('*', async (c, next) => {
-    if (!allowsLocal(c.req.header('host') ?? new URL(c.req.url).host, c.req.header('origin'), devOrigins)) {
-      return c.json({ error: 'Only local Extendo clients are allowed' }, 403);
+    const decision = decideOrigin({
+      host: c.req.header('host') ?? new URL(c.req.url).host,
+      origin: c.req.header('origin'),
+      'x-forwarded-host': c.req.header('x-forwarded-host'),
+      'x-forwarded-proto': c.req.header('x-forwarded-proto'),
+    }, policy);
+    if (!decision.allowed) {
+      runtime.ctx.logger.debug(`Rejected ${c.req.method} ${c.req.path} from ${describeOrigin(decision)}`);
+      return c.json({ error: 'This Extendo server does not accept requests from that origin' }, 403);
     }
     c.header('X-Content-Type-Options', 'nosniff');
     c.header('Referrer-Policy', 'no-referrer');
     c.header('X-Frame-Options', 'DENY');
     await next();
   });
-  app.use('/api/*', cors({ origin: (origin) => devOrigins.includes(origin) ? origin : null, allowMethods: ['GET', 'POST', 'PUT', 'OPTIONS'], allowHeaders: ['Content-Type'] }));
+  app.use('/api/*', cors({ origin: (origin) => isAllowedOrigin(origin, policy) ? origin : null, allowMethods: ['GET', 'POST', 'PUT', 'OPTIONS'], allowHeaders: ['Content-Type'] }));
   app.use('/api/*', bodyLimit({
     maxSize: 512 * 1024,
     onError: (c) => c.json({ error: 'Request body is too large' }, 413),

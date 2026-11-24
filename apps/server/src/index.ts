@@ -5,11 +5,13 @@ import { fileURLToPath } from 'node:url';
 import { getRequestListener } from '@hono/node-server';
 import { createExtensionApp } from './extensionApi.js';
 import { createHttpApp, type HttpOptions } from './http.js';
+import { resolveOriginPolicy } from './origin.js';
 import { createRuntime, type Runtime, type RuntimeOptions } from './runtime.js';
 import { attachRpc } from './ws.js';
 
 export * from './runtime.js';
 export { createHttpApp } from './http.js';
+export * from './origin.js';
 
 export interface ServerOptions extends RuntimeOptions, HttpOptions {
   port?: number;
@@ -35,8 +37,9 @@ export async function startServer(options: ServerOptions = {}): Promise<ExtendoS
   const runtime = await createRuntime({ ...options, mode: 'web' });
   const candidates = [resolve('apps/web/dist'), fileURLToPath(new URL('../../web/dist', import.meta.url))];
   const webRoot = options.webRoot ?? candidates.find((candidate) => existsSync(resolve(candidate, 'index.html')));
-  const app = createHttpApp(runtime, { ...options, webRoot });
-  const plugins = createExtensionApp(runtime.extensions, { devOrigins: options.devOrigins });
+  const policy = resolveOriginPolicy(options);
+  const app = createHttpApp(runtime, { ...options, webRoot, origin: policy });
+  const plugins = createExtensionApp(runtime.extensions, { origin: policy });
   const server = createServer(getRequestListener((request) => {
     const { pathname } = new URL(request.url);
     const authored = pathname === '/api/extensions' || pathname.startsWith('/api/extensions/');
@@ -44,7 +47,7 @@ export async function startServer(options: ServerOptions = {}): Promise<ExtendoS
   }));
   let closeRpc: (() => Promise<void>) | undefined;
   try {
-    closeRpc = attachRpc(server, runtime, options.devOrigins);
+    closeRpc = attachRpc(server, runtime, policy);
     await listen(server, options.port ?? 4310);
     const address = server.address();
     if (!address || typeof address === 'string') throw new Error('Could not determine the HTTP listener port');

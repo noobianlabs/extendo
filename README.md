@@ -20,4 +20,21 @@ node packages/cli/dist/index.js headless "say hello" --provider demo
 
 Opening a project attaches a local directory; Extendo does not create or manage Git worktrees. The web console reads pull requests through `gh` when it runs against a real repository, and a failed read leaves the card out rather than blocking the thread. Extendo listens on loopback, stores workspace and session data under `~/.extendo` unless `EXTENDO_HOME` is set, and does not store provider keys in the workspace. Shell commands run as your user and are not sandboxed. Review every write or shell approval before allowing it.
 
+## Running behind a proxy or tunnel
+
+Extendo accepts a request only when its `Host` is loopback and its `Origin` is absent, matches that host, or is in an allowlist. A tunnel or preview proxy that rewrites `Host` (Cloudflare Tunnel, ngrok, a sandbox preview proxy) therefore needs the public origin the browser uses:
+
+```sh
+# the exact origin the browser sends, comma-separated when there are several
+EXTENDO_ALLOWED_ORIGINS=https://extendo.example.com node packages/cli/dist/index.js web --port 4310
+
+# the same through the CLI
+node packages/cli/dist/index.js web --port 4310 --allow-origin https://extendo.example.com
+
+# add this when the proxy also rewrites Host and forwards x-forwarded-host
+EXTENDO_TRUST_PROXY=1 node packages/cli/dist/index.js web --port 4310 --allow-origin https://extendo.example.com
+```
+
+`--allow-origin` and `EXTENDO_ALLOWED_ORIGINS` take exact origins only, as `scheme://host[:port]`; wildcards and paths are ignored. With `EXTENDO_TRUST_PROXY=1` (or `--trust-proxy`) Extendo trusts `x-forwarded-host` and `x-forwarded-proto` when it checks the origin, so a public origin that matches the forwarded host is accepted. Without it those headers are ignored, so a loopback-only server cannot be spoofed. A rejected request is logged at debug level with its host, origin, and forwarded host. `pnpm dev` keeps working as before: the Vite dev origins are always allowed.
+
 See [Architecture](docs/ARCHITECTURE.md), [Plugins](docs/PLUGINS.md), [Providers](docs/PROVIDERS.md), and [Web workspace](docs/UI.md).
