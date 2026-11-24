@@ -28,6 +28,26 @@ function check(condition, message) {
   console.log('  ✓ ' + message);
 }
 
+/** Layout invariants a screenshot would show but a headless run can prove. */
+async function layout(page, label) {
+  const overflow = await page.evaluate(() => ({
+    width: document.documentElement.scrollWidth,
+    viewport: window.innerWidth,
+  }));
+  check(overflow.width <= overflow.viewport + 1, `${label}: nothing overflows the viewport horizontally`);
+  const clipped = await page.evaluate(() => Array.from(document.querySelectorAll('[data-testid="workshop"] *, main *'))
+    .filter((node) => node.scrollWidth > node.clientWidth + 2 && getComputedStyle(node).overflowX === 'visible' && node.clientWidth > 0)
+    .map((node) => (node.className || node.tagName).toString().slice(0, 60)));
+  check(clipped.length === 0, `${label}: no clipped text` + (clipped.length ? ': ' + clipped.join(', ') : ''));
+}
+
+async function sideBySide(page) {
+  const panel = await page.getByTestId('workshop').boundingBox();
+  const composer = await page.getByRole('form', { name: 'Compose a message' }).boundingBox();
+  check(Boolean(panel && composer), 'the panel and the composer both have a box');
+  check(panel.x >= composer.x + composer.width - 1, 'the workshop takes its own column; the composer is not under it');
+}
+
 async function openWorkshop(page) {
   await page.getByTestId('open-workshop').click();
   await page.locator('[data-testid="workshop"][data-open="true"]').waitFor();
@@ -72,9 +92,55 @@ async function runFlow(page, url, { capture }) {
   await page.getByText(/word_count answered/).waitFor({ timeout: 25_000 });
   await settle(page, 500);
   check((await page.getByTestId('plugin-seam').count()) === 1, 'the seam marks where the plugin joined this thread');
-  const transcript = await page.locator('main, section').first().innerText().catch(() => '');
-  check(/word_count/.test(transcript) || true, 'the transcript names the tool the plugin registered');
+  check(/plugin\/word-count joined/.test(await page.getByTestId('plugin-seam').innerText()), 'the seam names the plugin that joined');
+  const call = await page.getByText('word_count', { exact: false }).count();
+  check(call > 0, 'the transcript shows the tool the plugin registered');
+  await sideBySide(page);
+  await layout(page, '1440');
   if (capture) await shot(page, '04-agent-call');
+}
+
+const WORST_NAMES = [
+  'a',
+  '文字化けプラグイン',
+  'Ünïcödé Åssert',
+  'This plugin counts every word in every paragraph of a very long document',
+  'Search 2',
+  'Release notes',
+  'Dead code',
+  'Type check',
+  'Bundle size',
+  'Changelog',
+  'Owner lookup',
+  'Review findings',
+];
+
+async function createWorstCase(url) {
+  for (const name of WORST_NAMES) {
+    const response = await fetch(url + '/api/extensions', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name }),
+    });
+    if (!response.ok) throw new Error('Could not create the worst-case plugin ' + name);
+  }
+}
+
+async function worstCase(browser, url) {
+  console.log('worst case: 12 plugins, long and non-Latin names');
+  await createWorstCase(url);
+  for (const [width, height, theme, name] of [[1440, 900, 'dark', '09-worst-1440'], [390, 844, 'dark', '10-worst-390']]) {
+    const { context, page, problems } = await session(browser, { width, height, theme });
+    page.setDefaultTimeout(20_000);
+    await page.goto(url, { waitUntil: 'networkidle' });
+    await openWorkshop(page);
+    await page.getByTestId('plugin-editor').waitFor();
+    await settle(page, 400);
+    await layout(page, `worst ${width}`);
+    const tabs = await page.getByRole('tab').count();
+    check(tabs === WORST_NAMES.length + 1, `worst ${width}: every plugin has a tab (${tabs})`);
+    await shot(page, name);
+    check(problems.length === 0, `worst ${width}: no console errors` + (problems.length ? ': ' + problems.join(' | ') : ''));
+    await context.close();
+  }
 }
 
 async function main() {
@@ -116,6 +182,7 @@ async function main() {
     await phone.page.goto(app.url, { waitUntil: 'networkidle' });
     await phone.page.getByTestId('plugin-seam').waitFor({ timeout: 25_000 });
     await settle(phone.page, 400);
+    await layout(phone.page, '390');
     await shot(phone.page, '06-390-dark');
     await openWorkshop(phone.page);
     await phone.page.getByTestId('plugin-editor').waitFor();
@@ -130,6 +197,7 @@ async function main() {
     await lightPhone.context.close();
     await phone.context.close();
     check(phone.problems.length === 0, 'no console errors at 390: ' + (phone.problems.join(' | ') || 'none'));
+    await worstCase(browser, app.url);
   } catch (error) {
     failure = error;
     console.error(error);
