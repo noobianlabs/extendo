@@ -10,9 +10,9 @@
   --surface-3: light-dark(#dbdbdf, #1f1f22);
   --surface-4: light-dark(#d0d0d5, #29292c);
 
-  --accent: light-dark(#a9540e, #ee9a3c);
-  --accent-fill: light-dark(#a9540e, #ee9a3c);
-  --accent-fill-hover: light-dark(#974a0b, #f3a955);
+  --accent: light-dark(#9c4c0c, #ee9a3c);
+  --accent-fill: light-dark(#9c4c0c, #ee9a3c);
+  --accent-fill-hover: light-dark(#8a4208, #f3a955);
   --accent-ink: light-dark(#ffffff, #0a0a0b);
   --on-accent: var(--accent-ink);
   --accent-soft: color-mix(in srgb, var(--accent) 14%, transparent);
@@ -35,8 +35,8 @@
 
   --text: light-dark(#18181b, #ededec);
   --muted-1: light-dark(#55555c, #a3a3a1);
-  --muted-2: light-dark(#76767e, #7a7a7c);
-  --muted-3: light-dark(#9d9da5, #58585b);
+  --muted-2: light-dark(#65656d, #808088);
+  --muted-3: light-dark(#82828a, #64646c);
   --icon-muted: var(--muted-2);
 
   --border-1: light-dark(rgba(24, 24, 32, 0.08), rgba(255, 250, 245, 0.07));
