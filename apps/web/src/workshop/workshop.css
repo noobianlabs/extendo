@@ -1,6 +1,6 @@
 /* The workshop's width, shared by the panel and by the transcript that gives up that width. */
 :root {
-  --workshop-width: min(560px, 46vw);
+  --workshop-width: min(var(--rail-wide, 560px), 46vw);
   --workshop-inset: var(--workshop-width);
 }
 
