@@ -88,12 +88,12 @@
 }
 
 .count[data-zero="true"] {
-  color: var(--muted-3);
+  color: var(--muted-2);
 }
 
 .meta {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: var(--space-1);
   margin: 0;
   min-inline-size: 0;
@@ -102,7 +102,12 @@
   letter-spacing: 0;
 }
 
+.head {
+  flex: none;
+}
+
 .subject {
+  flex: 1 1 auto;
   min-inline-size: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -110,7 +115,7 @@
 }
 
 .worktreeLabel {
-  flex: none;
+  flex: 0 0 auto;
   color: var(--muted-2);
   font: var(--type-micro);
   letter-spacing: var(--track-micro);
@@ -118,6 +123,7 @@
 }
 
 .worktreePath {
+  flex: 1 1 auto;
   min-inline-size: 0;
   overflow: hidden;
   color: var(--muted-1);
@@ -126,11 +132,8 @@
   white-space: nowrap;
 }
 
-.worktreeActions {
-  display: flex;
+.worktreeRow .textButton {
   flex: none;
-  gap: var(--space-1);
-  align-items: center;
   margin-inline-start: auto;
 }
 
@@ -173,7 +176,7 @@
 .groupEmpty {
   margin: 0;
   padding: var(--space-2) var(--space-4) var(--space-3);
-  color: var(--muted-3);
+  color: var(--muted-2);
   font: var(--type-caption);
   letter-spacing: var(--track-caption);
 }
@@ -236,15 +239,25 @@
 }
 
 .path {
+  display: flex;
+  flex: 1 1 auto;
   min-inline-size: 0;
   overflow: hidden;
   font: var(--type-mono);
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+/* The directory yields and ellipsizes; the file name is what a person scans for, so it never does. */
 .parent {
+  flex: 0 1 auto;
+  min-inline-size: 0;
+  overflow: hidden;
   color: var(--muted-2);
+  text-overflow: ellipsis;
+}
+
+.name {
+  flex: none;
 }
 
 .blocked {
@@ -471,6 +484,31 @@
   cursor: default;
 }
 
+.danger {
+  display: inline-flex;
+  gap: var(--space-1);
+  align-items: center;
+  min-block-size: var(--control-height);
+  margin-inline-start: auto;
+  padding: 0 var(--space-2);
+  border: 0;
+  background: transparent;
+  color: var(--muted-2);
+  font: var(--type-caption);
+  letter-spacing: var(--track-caption);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.danger:hover:not(:disabled) {
+  color: var(--destructive);
+}
+
+.danger:disabled {
+  color: var(--muted-3);
+  cursor: default;
+}
+
 .hint {
   display: flex;
   gap: var(--space-1);
@@ -511,6 +549,12 @@
   overflow: hidden;
   clip-path: inset(50%);
   white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .diff {
+    padding-inline: var(--space-2);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

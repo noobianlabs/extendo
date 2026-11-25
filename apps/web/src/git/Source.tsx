@@ -135,7 +135,8 @@ export function SourceSurface({ thread, project, active, agentStatus, revision, 
       setConfirm({
         title: `Stage ${file.path}?`,
         description: <>
-          Extendo refuses this path by default: {file.blocked}. Staging it puts it in the next commit.
+          Staging {file.path} puts it in the next commit, where a credential becomes part of the branch's
+          history. Extendo refuses it by default: {file.blocked}.
         </>,
         confirmLabel: 'Stage it anyway',
         onConfirm: async () => { setView(await stage(target, [file.path], true)); },
@@ -301,7 +302,7 @@ export function SourceSurface({ thread, project, active, agentStatus, revision, 
   return <div className={styles.source} data-testid="source-surface">
     <header className={styles.checkout}>
       <div className={styles.branchRow}>
-        <GitBranch size={13} aria-hidden="true" />
+        <GitBranch size={14} aria-hidden="true" />
         <span className={styles.branch} dir="ltr" title={status?.branch}>{status?.branch ?? (status?.detached ? 'detached HEAD' : 'no branch')}</span>
         {status?.upstream && <span className={styles.upstream} title={`Upstream ${status.upstream}`}>{status.upstream}</span>}
         {!status?.upstream && status?.branch && <span className={styles.upstream}>not published</span>}
@@ -311,30 +312,27 @@ export function SourceSurface({ thread, project, active, agentStatus, revision, 
         </span>
         <button type="button" className={styles.icon} aria-label="Refresh changes" title="Refresh changes"
           disabled={busy === 'refresh'} onClick={() => { void run('refresh', refresh); }}>
-          <RefreshCw size={13} aria-hidden="true" />
+          <RefreshCw size={14} aria-hidden="true" />
         </button>
       </div>
       <div className={styles.worktreeRow}>
-        <GitFork size={12} aria-hidden="true" />
+        <GitFork size={14} aria-hidden="true" />
         <span className={styles.worktreeLabel} data-testid="checkout-kind" data-kind={view.checkout.worktree ? 'worktree' : 'shared'}>
-          {view.checkout.worktree ? 'Worktree' : 'Shared checkout'}
+          {view.checkout.worktree ? 'Worktree' : 'Shared'}
         </span>
-        <code className={styles.worktreePath} title={view.checkout.path} dir="ltr">{shortPath(view.checkout.path)}</code>
-        {thread && <span className={styles.worktreeActions}>
-          <button type="button" className={styles.textButton}
-            disabled={Boolean(busy) || working}
-            title={working ? 'Wait for this turn to finish before moving its checkout' : view.checkout.worktree ? 'Move this thread back to the shared checkout' : 'Give this thread its own worktree and branch'}
-            onClick={view.checkout.worktree ? releaseWorktree : moveIntoWorktree}>
-            {view.checkout.worktree ? 'Remove' : 'Own worktree'}
-          </button>
-          <button type="button" className={styles.icon} aria-label="Delete thread" title="Delete thread"
-            disabled={Boolean(busy)} onClick={requestDelete}><Trash2 size={13} aria-hidden="true" /></button>
-        </span>}
+        <code className={styles.worktreePath} title={view.checkout.path} dir="ltr" data-testid="checkout-path">
+          {shortPath(view.checkout.path, 1)}
+        </code>
+        {thread && <button type="button" className={styles.textButton}
+          disabled={Boolean(busy) || working}
+          title={working ? 'Wait for this turn to finish before moving its checkout' : view.checkout.worktree ? 'Move this thread back to the shared checkout' : 'Give this thread its own worktree and branch'}
+          onClick={view.checkout.worktree ? releaseWorktree : moveIntoWorktree}>
+          {view.checkout.worktree ? 'Remove' : 'Own worktree'}
+        </button>}
       </div>
       {refreshed && <p className={styles.meta}>
-        <span>{status?.head ? `HEAD ${status.head.slice(0, 7)}` : 'no commits yet'}</span>
+        <span className={styles.head}>{status?.head ? `HEAD ${status.head.slice(0, 7)}` : 'no commits yet'}</span>
         {status?.headSubject && <span className={styles.subject} title={status.headSubject}>· {status.headSubject}</span>}
-        {status?.truncatedFiles && <span>· listing the first {number.format(status.files.length)} files</span>}
       </p>}
     </header>
 
@@ -342,7 +340,10 @@ export function SourceSurface({ thread, project, active, agentStatus, revision, 
       <p><strong>No repository here.</strong> {status?.error ?? problem ?? 'This workspace is not a git checkout.'}</p>
       <p>Extendo can still edit files here. Stage and commit need a checkout: run <code>git init</code> in {shortPath(view.checkout.path, 3)} and refresh.</p>
     </div> : <div className={styles.body}>
-      {groups.map((group) => <section key={group.id} className={styles.group} aria-label={`${group.title}, ${group.files.length}`}>
+      {status.files.length === 0 && <p className={styles.clean}>
+        The working tree is clean on {status.branch ?? 'this checkout'}. Nothing to commit.
+      </p>}
+      {status.files.length > 0 && groups.map((group) => <section key={group.id} className={styles.group} aria-label={`${group.title}, ${group.files.length}`}>
         <div className={styles.groupHead}>
           <h3 className={styles.groupTitle}>{group.title}</h3>
           <span className={styles.groupCount}>{number.format(group.files.length)}</span>
@@ -372,8 +373,10 @@ export function SourceSurface({ thread, project, active, agentStatus, revision, 
                 <button type="button" className={styles.row} aria-expanded={expanded}
                   aria-label={`${file.path}, ${file.untracked ? 'untracked' : file.staged !== 'none' ? 'staged' : 'unstaged'} ${file.staged !== 'none' ? file.staged : file.unstaged}`}
                   onClick={() => { void showDiff(file); }}>
-                  <span className={styles.change} data-change={change} aria-hidden="true">{change}</span>
-                  <span className={styles.path} dir="ltr"><span className={styles.parent}>{parent}</span>{name}</span>
+                  <span className={styles.change} data-change={file.untracked ? 'untracked' : file.staged !== 'none' ? file.staged : file.unstaged} aria-hidden="true">{change}</span>
+                  <span className={styles.path} dir="ltr" title={file.path}>
+                    <span className={styles.parent}>{parent}</span><span className={styles.name}>{name}</span>
+                  </span>
                   {file.blocked && <span className={styles.blocked} title={file.blocked}><Lock size={10} aria-hidden="true" />secret</span>}
                   {(file.additions !== undefined || file.deletions !== undefined) && <span className={styles.stats}>
                     <span className={styles.added}>+{number.format(file.additions ?? 0)}</span>
@@ -414,7 +417,6 @@ export function SourceSurface({ thread, project, active, agentStatus, revision, 
           })}
         </ul>}
       </section>)}
-      {status?.files.length === 0 && <p className={styles.clean}>The working tree is clean. Nothing to commit.</p>}
     </div>}
 
     <form className={styles.commitBar} onSubmit={submitCommit} aria-label="Commit staged changes">
@@ -435,6 +437,9 @@ export function SourceSurface({ thread, project, active, agentStatus, revision, 
         {canOpenPullRequest && <button type="button" className={styles.action} disabled={Boolean(busy)}
           title="Open a pull request with the GitHub CLI" onClick={requestPullRequest}>
           <GitPullRequest size={12} aria-hidden="true" />{busy === 'pull' ? 'Opening…' : 'Pull request'}
+        </button>}
+        {thread && <button type="button" className={styles.danger} disabled={Boolean(busy)} onClick={requestDelete}>
+          <Trash2 size={12} aria-hidden="true" />Delete thread
         </button>}
       </div>
       {pullRequestBlocker && !canOpenPullRequest && <p className={styles.hint} data-testid="pull-request-blocked">
