@@ -92,6 +92,36 @@ async function designRules(page, label) {
   return report.sizes;
 }
 
+/**
+ * A row has to be identifiable at the narrowest width: the file name never truncates (the directory
+ * does), and the checkout row always carries the full path in its title. Screening a list of files
+ * whose names all end in an ellipsis is the failure this asserts against.
+ */
+async function legibility(page, label) {
+  const report = await page.evaluate(() => ({
+    clipped: [...document.querySelectorAll('[data-testid="change-row"]')].flatMap((row) => {
+      const name = row.querySelector('[class*="name"]');
+      if (!name) return [{ path: row.getAttribute('data-path'), why: 'no name element' }];
+      const clipped = name.scrollWidth > name.clientWidth + 1;
+      return clipped ? [{ path: row.getAttribute('data-path'), shown: name.clientWidth, needs: name.scrollWidth }] : [];
+    }),
+    untitled: [...document.querySelectorAll('[data-testid="change-row"] [class*="path"]')]
+      .filter((node) => !node.getAttribute('title')).length,
+    checkout: (() => {
+      const code = document.querySelector('[data-testid="checkout-path"]');
+      return { text: code?.textContent?.trim() ?? '', title: code?.getAttribute('title') ?? '', width: code?.clientWidth ?? 0 };
+    })(),
+  }));
+  // The demo's five paths all have short names, so none of them may clip; a pathological name that
+  // cannot fit is allowed to clip, and is caught by the worst-case section instead.
+  const demo = report.clipped.filter((entry) => entry.path && !/Ünïcödé|unbroken|with-a-very-long|keeps-going|spaces and/.test(entry.path));
+  check(demo.length === 0, `${label}: every file name is readable` + (demo.length ? ': ' + JSON.stringify(demo) : ''));
+  check(report.untitled === 0, `${label}: every path carries its full value in a title`);
+  check(report.checkout.text.length >= 8, `${label}: the checkout row names its directory (${report.checkout.text})`);
+  check(report.checkout.title.includes(report.checkout.text.replace(/…$/, '')),
+    `${label}: the checkout path's title is the full path (${report.checkout.title})`);
+}
+
 const group = (page, name) => page.getByRole('region', { name: new RegExp(`^${name},`) });
 const rows = (page, name) => group(page, name).locator('[data-testid="change-row"]');
 const row = (page, path) => page.locator(`[data-testid="change-row"][data-path="${path}"]`);
@@ -138,7 +168,7 @@ async function runFlow(browser, app) {
   check((await surface(page).innerText()).includes('origin/feat/empty-state-copy'), 'it names the upstream');
   check(await page.locator('[aria-label="1 ahead, 0 behind"]').count() === 1, 'ahead/behind matches the repository');
   check((await surface(page).innerText()).includes('WORKTREE'), 'it says the thread is in its own worktree');
-  check((await surface(page).innerText()).includes('northstar-ui.worktrees/feat-empty-state-copy'), 'it names the worktree by its last segments');
+  check((await surface(page).innerText()).includes('feat-empty-state-copy'), 'it names the worktree directory the thread is in');
   const grouped = await counts(page);
   check(grouped.staged === 1 && grouped.changes === 2 && grouped.untracked === 2,
     `files are grouped staged/changes/untracked: ${JSON.stringify(grouped)}`);
@@ -148,6 +178,7 @@ async function runFlow(browser, app) {
     'its stage control is the deliberate one, not the ordinary one');
   await layout(page, '1440');
   await designRules(page, '1440');
+  await legibility(page, '1440');
 
   console.log('a real diff');
   await row(page, 'apps/web/src/search/EmptyState.tsx').locator('button[aria-expanded]').click();
@@ -183,6 +214,7 @@ async function runFlow(browser, app) {
   await settle(light.page, 600);
   await layout(light.page, 'light 1440');
   await designRules(light.page, 'light 1440');
+  await legibility(light.page, 'light 1440');
   await shot(light.page, '03-changes-1440-light');
   check(light.problems.length === 0, 'no console errors in the light theme: ' + (light.problems.join(' | ') || 'none'));
   await light.context.close();
@@ -199,6 +231,7 @@ async function runFlow(browser, app) {
   check(phoneCounts.staged === 1 && phoneCounts.changes === 2, 'the phone sheet lists the same three groups');
   await layout(phone.page, '390');
   await designRules(phone.page, '390');
+  await legibility(phone.page, '390');
   await shot(phone.page, '04-changes-390-dark');
   await phone.context.close();
 
@@ -264,12 +297,14 @@ async function runFlow(browser, app) {
   await page.getByRole('button', { name: /^Trace the keyboard shortcut/ }).click();
   await settle(page, 600);
   await openChanges(page);
-  check((await surface(page).innerText()).includes('SHARED CHECKOUT'), 'a thread without a worktree says so');
+  check(/\bSHARED\b/.test(await surface(page).innerText()), 'a thread without a worktree says so');
   await page.getByRole('button', { name: 'Own worktree' }).click();
   await page.locator('[data-testid="checkout-kind"][data-kind="worktree"]').waitFor({ timeout: 20_000 });
   await settle(page, 700);
   const text = await surface(page).innerText();
   check(text.includes('extendo/trace-the-keyboard-shortcut'), 'the new worktree is on a branch named after the thread');
+  check(/working tree is clean/i.test(text), 'a clean tree says so once, in a sentence');
+  check(!/Nothing staged yet|No unstaged changes|No untracked files/.test(text), 'and does not stack three empty groups behind it');
   check(await page.locator('[aria-label="0 ahead, 0 behind"]').count() === 1, 'a fresh worktree is level with the branch it came from');
   const moved = await api(app.url, `/git/status?sessionId=${(await api(app.url, '/threads')).find((t) => t.title === 'Trace the keyboard shortcut').sessionId}`);
   check(moved.checkout.worktree === moved.checkout.path, 'the API agrees the thread now runs in the worktree');
