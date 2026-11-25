@@ -180,6 +180,7 @@ async function rails(page) {
   await press(page, row(page, '.env.local').locator('button[aria-label="Stage .env.local anyway"]'));
   const dialog = page.getByRole('dialog');
   await dialog.waitFor();
+  await page.evaluate(() => window.__demoRaise?.());
   await pause(500);
   await say(page, 'It says what the file is and why it is refused, and the only way past is this confirmation.');
   await pause(1_800);
@@ -190,6 +191,7 @@ async function rails(page) {
   await press(page, page.getByRole('button', { name: 'Delete thread' }));
   const deletion = page.getByRole('dialog');
   await deletion.waitFor();
+  await page.evaluate(() => window.__demoRaise?.());
   await pause(2_000);
   await press(page, deletion.getByRole('button', { name: 'Cancel' }));
   await pause(700);
