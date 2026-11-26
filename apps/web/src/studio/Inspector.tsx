@@ -17,6 +17,8 @@ import styles from './inspector.module.css';
 const DiffView = lazy(() => import('../chat/diff'));
 
 const tabs = ['Overview', 'Crew', 'Subagents', 'Changes', 'Terminal', 'Preview'] as const;
+/** The order tabs leave the strip in when the panel cannot hold them all. */
+const hiddenOrder: readonly InspectorTab[] = ['Terminal', 'Preview'];
 export type InspectorTab = typeof tabs[number];
 type WorkState = 'done' | 'running' | 'failed' | 'queued';
 type ToolKind = 'read' | 'edit' | 'test' | 'shell' | 'other';
@@ -276,12 +278,23 @@ export function Inspector({
     onTabChange?.(next);
   };
   const strip = useRef<HTMLDivElement>(null);
+  const needed = useRef(0);
+  const [compact, setCompact] = useState(0);
   const [overflow, setOverflow] = useState<'' | 'start' | 'end' | 'both'>('');
+  const [moreOpen, setMoreOpen] = useState(false);
+  const more = useRef<HTMLDivElement>(null);
+  const moreId = useId();
+  const hiddenTabs: readonly InspectorTab[] = hiddenOrder.slice(0, compact);
+  const shown = visibleTabs.filter((name) => !hiddenTabs.includes(name));
   useLayoutEffect(() => {
     const node = strip.current;
     if (!node) return;
     const sync = () => {
+      if (compact === 0) needed.current = Math.max(needed.current, node.scrollWidth);
       const room = node.scrollWidth - node.clientWidth;
+      if (needed.current <= node.clientWidth + 1) setCompact(0);
+      else if (!compact) setCompact(1);
+      else if (room > 1 && compact < hiddenOrder.length) setCompact(compact + 1);
       if (room <= 1) return setOverflow('');
       const start = node.scrollLeft > 1;
       const end = node.scrollLeft < room - 1;
@@ -295,7 +308,30 @@ export function Inspector({
       observer.disconnect();
       node.removeEventListener('scroll', sync);
     };
-  }, []);
+  }, [compact, visibleTabs.length]);
+  useLayoutEffect(() => {
+    if (!moreOpen) return;
+    const menu = more.current?.querySelector<HTMLElement>('[role="menu"]');
+    menu?.querySelector<HTMLElement>('[role="menuitemradio"]')?.focus();
+    const outside = (event: PointerEvent) => {
+      if (event.target instanceof Node && !more.current?.contains(event.target)) setMoreOpen(false);
+    };
+    const escape = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setMoreOpen(false);
+        more.current?.querySelector<HTMLElement>('button')?.focus();
+      }
+    };
+    document.addEventListener('pointerdown', outside);
+    document.addEventListener('keydown', escape);
+    return () => {
+      document.removeEventListener('pointerdown', outside);
+      document.removeEventListener('keydown', escape);
+    };
+  }, [moreOpen]);
+  useLayoutEffect(() => {
+    if (!hiddenTabs.length) setMoreOpen(false);
+  }, [hiddenTabs.length]);
   useLayoutEffect(() => {
     const node = strip.current;
     const selected = node?.querySelector<HTMLElement>('[aria-selected="true"]');
@@ -338,9 +374,9 @@ export function Inspector({
     setOpened((current) => current && current.threadId === thread?.id && current.path === path ? undefined : { threadId: thread?.id, path });
   };
   function navigateTabs(event: KeyboardEvent<HTMLButtonElement>, index: number) {
-    const next = event.key === 'ArrowRight' ? (index + 1) % visibleTabs.length
-      : event.key === 'ArrowLeft' ? (index - 1 + visibleTabs.length) % visibleTabs.length
-      : event.key === 'Home' ? 0 : event.key === 'End' ? visibleTabs.length - 1 : -1;
+    const next = event.key === 'ArrowRight' ? (index + 1) % shown.length
+      : event.key === 'ArrowLeft' ? (index - 1 + shown.length) % shown.length
+      : event.key === 'Home' ? 0 : event.key === 'End' ? shown.length - 1 : -1;
     if (next < 0) return;
     event.preventDefault();
     const button = event.currentTarget.parentElement?.querySelectorAll('button')[next];
@@ -355,14 +391,47 @@ export function Inspector({
       </button>
     </div>
     <div className={styles.tabs} ref={strip} role="tablist" aria-label="Inspector views" data-overflow={overflow || undefined}>
-      {visibleTabs.map((name, index) => <button
+      {shown.map((name, index) => <button
         key={name} type="button" role="tab" id={`${baseId}-${name}-tab`}
         aria-selected={active === name} aria-controls={`${baseId}-${name}`} tabIndex={active === name ? 0 : -1}
         onClick={() => selectTab(name)} onKeyDown={(event) => navigateTabs(event, index)}
       >{name}</button>)}
+      {hiddenTabs.length > 0 && <div className={styles.more} ref={more}>
+        <button type="button" aria-haspopup="menu" aria-expanded={moreOpen} aria-controls={moreId}
+          data-selected={hiddenTabs.includes(active) || undefined}
+          onKeyDown={(event) => {
+            if (event.key !== 'ArrowDown') return;
+            event.preventDefault();
+            setMoreOpen(true);
+          }}
+          onClick={() => setMoreOpen((open) => !open)}
+        >{hiddenTabs.includes(active) ? active : 'More'}</button>
+        {moreOpen && <div className={styles.moreMenu} id={moreId} role="menu" aria-label="More inspector views"
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') {
+              event.preventDefault();
+              event.stopPropagation();
+              setMoreOpen(false);
+              more.current?.querySelector<HTMLElement>('button')?.focus();
+              return;
+            }
+            const items = [...event.currentTarget.querySelectorAll<HTMLElement>('[role="menuitemradio"]')];
+            const at = items.indexOf(document.activeElement as HTMLElement);
+            if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+              event.preventDefault();
+              const step = event.key === 'ArrowDown' ? 1 : -1;
+              items[(at + step + items.length) % items.length]?.focus();
+            }
+          }}>
+          {hiddenTabs.map((name) => <button key={name} type="button" role="menuitemradio" aria-checked={active === name}
+            className={styles.moreItem} onClick={() => { selectTab(name); setMoreOpen(false); }}>{name}</button>)}
+        </div>}
+      </div>}
     </div>
     {visibleTabs.map((name) => <div key={name} id={`${baseId}-${name}`} role="tabpanel"
-      aria-labelledby={`${baseId}-${name}-tab`} className={styles.panel} hidden={active !== name} tabIndex={0}>
+      aria-labelledby={shown.includes(name) ? `${baseId}-${name}-tab` : undefined}
+      aria-label={shown.includes(name) ? undefined : name}
+      className={styles.panel} hidden={active !== name} tabIndex={0}>
       {active === name && (!thread && name !== 'Preview' ? <p className={styles.empty}>Open a thread to inspect its work.</p>
         : name === 'Crew' ? <CrewPanel thread={thread} now={now} />
         : name === 'Subagents' ? <SubagentsPanel thread={thread} now={now} onSteer={onSteer} onStop={onStop} onApproval={onApproval} />

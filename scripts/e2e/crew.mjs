@@ -38,6 +38,7 @@ async function openCaptain(page, url) {
 async function strip(page, label) {
   const read = () => page.evaluate(() => {
     const tabs = document.querySelector('[aria-label="Inspector views"]');
+    const panel = document.querySelector('[aria-label="Inspector"]');
     const style = getComputedStyle(tabs);
     const box = tabs.getBoundingClientRect();
     const start = box.left + parseFloat(style.paddingLeft);
@@ -45,14 +46,17 @@ async function strip(page, label) {
     return {
       scrollable: tabs.scrollWidth > tabs.clientWidth + 1,
       fade: tabs.dataset.overflow ?? null,
-      scrollLeft: Math.round(tabs.scrollLeft),
+      panelRight: panel.getBoundingClientRect().right - parseFloat(getComputedStyle(panel).paddingRight),
+      stripRight: box.right,
       tabs: [...tabs.querySelectorAll('button')].map((button) => {
         const rect = button.getBoundingClientRect();
         return {
           name: button.textContent.trim(),
+          role: button.getAttribute('role'),
           scrollWidth: button.scrollWidth,
           clientWidth: button.clientWidth,
           width: Math.round(rect.width),
+          height: Math.round(rect.height),
           inside: rect.left >= start - 0.5 && rect.right <= end + 0.5,
           selected: button.getAttribute('aria-selected') === 'true',
         };
@@ -62,21 +66,40 @@ async function strip(page, label) {
   const first = await read();
   for (const tab of first.tabs) {
     check(tab.scrollWidth <= tab.clientWidth + 1, `${label}: "${tab.name}" does not clip its own label (${tab.scrollWidth} ≤ ${tab.clientWidth} + 1)`);
+    check(tab.inside, `${label}: "${tab.name}" sits inside the strip's padding box`);
+    check(tab.height >= 28 && tab.width >= 28, `${label}: "${tab.name}" keeps a ${tab.width}×${tab.height} tap target`);
   }
-  check(Boolean(first.fade) === first.scrollable, `${label}: the strip fades only when it genuinely overflows (fade "${first.fade}", ${first.scrollable ? 'overflows' : 'fits'})`);
-  check(first.tabs.every((tab) => tab.width >= 28), `${label}: every tab keeps a tap target of at least 28px`);
+  check(Math.abs(first.stripRight - first.panelRight) <= 4, `${label}: the strip's right edge is within 4px of the panel's content box (${first.stripRight} vs ${first.panelRight})`);
+  check(Boolean(first.fade) === first.scrollable, `${label}: the strip fades only if it genuinely overflows (fade "${first.fade}", ${first.scrollable ? 'overflows' : 'fits'})`);
   const selected = first.tabs.find((tab) => tab.selected);
-  check(Boolean(selected?.inside), `${label}: the selected "${selected?.name}" tab is fully inside the strip`);
-  const last = first.tabs.at(-1);
-  await page.getByRole('tab', { name: last.name }).click();
-  await page.waitForTimeout(160);
-  const reached = await read();
-  const final = reached.tabs.at(-1);
-  check(final.inside, `${label}: selecting "${final.name}" scrolls the whole label inside the strip`);
-  check(reached.tabs.filter((tab) => tab.selected).length === 1 && final.selected, `${label}: "${final.name}" is the one selected tab`);
-  check(!reached.scrollable || reached.scrollLeft > 0, `${label}: the strip scrolled to reach it (${reached.scrollLeft}px)`);
+  check(Boolean(selected), `${label}: one tab is selected`);
+  return first;
+}
+
+async function stripFallback(page, width) {
+  const compact = await strip(page, '320 dark');
+  check(compact.tabs.length === 5, `320 dark: four tabs and More, not six (${compact.tabs.map(({ name }) => name).join(', ')})`);
+  check(!compact.scrollable && compact.fade === null, '320 dark: the tabs that remain fit without a fade');
+  const more = page.getByRole('button', { name: /^(More|Terminal|Preview)$/ }).last();
+  check(await more.getAttribute('aria-haspopup') === 'menu', '320 dark: More is a menu trigger');
+  await more.click();
+  const menu = page.getByRole('menu', { name: 'More inspector views' });
+  await menu.waitFor();
+  const items = await menu.getByRole('menuitemradio').allTextContents();
+  check(items.join(',') === 'Terminal,Preview', `320 dark: the menu holds the tabs that did not fit (${items.join(', ')})`);
+  await menu.getByRole('menuitemradio', { name: 'Terminal' }).click();
+  await page.getByRole('tabpanel', { name: 'Terminal' }).waitFor();
+  await page.waitForTimeout(150);
+  check(await page.getByRole('button', { name: 'Terminal' }).isVisible(), '320 dark: the trigger names the open hidden tab');
+  await page.getByRole('button', { name: 'Terminal' }).click();
+  const reopened = page.getByRole('menu', { name: 'More inspector views' });
+  await reopened.waitFor();
+  check(await reopened.getByRole('menuitemradio', { name: 'Terminal' }).getAttribute('aria-checked') === 'true', '320 dark: the menu marks the open tab');
+  await page.keyboard.press('Escape');
+  check(await reopened.count() === 0, '320 dark: Escape closes the menu');
   await page.getByRole('tab', { name: 'Overview' }).click();
   await page.waitForTimeout(120);
+  check(await page.getByRole('tabpanel', { name: 'Overview' }).isVisible(), `320 dark: Overview is back at ${width}px`);
 }
 
 async function crewPanel(page, panel) {
@@ -164,6 +187,19 @@ async function run() {
     await layout(phone.page, '390 dark');
     await shot(phone.page, '05-crew-390-drawer-dark');
     check(phone.problems.length === 0, 'no console errors on a phone: ' + (phone.problems.join(' | ') || 'none'));
+
+    console.log('320×700, dark — the panel is genuinely too narrow for six tabs');
+    const narrow = await session(browser, { width: 320, height: 700, theme: 'dark' });
+    await narrow.page.goto(app.url, { waitUntil: 'load' });
+    await narrow.page.getByRole('button', { name: 'Open navigation' }).click();
+    await narrow.page.getByRole('dialog', { name: 'Extendo navigation' }).getByRole('button', { name: /Run the empty-state copy crew/ }).click();
+    await narrow.page.getByRole('button', { name: 'Show workspace panel' }).click();
+    await narrow.page.getByRole('tab', { name: 'Crew' }).waitFor();
+    await narrow.page.waitForTimeout(400);
+    await stripFallback(narrow.page, 320);
+    await layout(narrow.page, '320 dark');
+    await shot(narrow.page, '06-crew-320-dark');
+    check(narrow.problems.length === 0, 'no console errors at 320: ' + (narrow.problems.join(' | ') || 'none'));
 
     console.log('\ncrew flow passed');
   } finally {
