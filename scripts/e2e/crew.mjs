@@ -103,7 +103,7 @@ async function stripFallback(page, width) {
 }
 
 async function crewPanel(page, panel) {
-  for (const text of ['Rework the empty-state copy', 'Draft the changelog entry']) {
+  for (const text of ['Rework the empty-state copy', 'Draft the changelog entry', 'Wrap the empty state in a status region', 'Tighten the search filters']) {
     check(await panel.getByText(text, { exact: true }).isVisible(), `the crew lists the worker "${text}"`);
   }
   for (const branch of ['extendo/crew-empty-state-copy', 'extendo/crew-changelog']) {
@@ -121,7 +121,7 @@ async function crewPanel(page, panel) {
 
 async function transcript(page) {
   const notices = page.getByRole('article', { name: 'Crew report' });
-  check(await notices.count() === 2, 'the captain transcript carries two crew report notes');
+  check(await notices.count() === 4, 'the captain transcript carries four crew report notes');
   check(await notices.nth(0).getByText('Rework the empty-state copy').isVisible(), 'the first report names its worker');
   check(await notices.nth(1).getByText('finished').isVisible(), 'a completed worker reads "finished"');
 }
@@ -133,10 +133,12 @@ async function run() {
     const threads = await (await fetch(app.url + '/api/threads')).json();
     const captain = threads.find(({ role }) => role === 'captain');
     check(Boolean(captain), 'the demo seeds a captain thread');
-    check(captain.crew?.length === 2, 'the captain has two workers');
+    check(captain.crew?.length === 4, 'the captain has four workers');
     check(captain.crew.every(({ branch }) => branch?.startsWith('extendo/crew-')), 'each worker runs on its own branch');
     check(captain.crew.every(({ report }) => Boolean(report)), 'each worker carries its last report on the thread, not just in its transcript');
-    check(captain.crew.every(({ pullRequest }) => Boolean(pullRequest?.number)), 'each worker carries its pull request');
+    check(captain.crew.filter(({ pullRequest }) => Boolean(pullRequest?.number)).length === 3, 'the three workers with commits carry their pull request');
+    check(captain.crew.filter(({ pullRequest }) => !pullRequest).length === 1, 'the worker with nothing committed carries no pull request');
+    check(captain.crew.every(({ base }) => base === 'main'), 'each worker records the branch it was cut from');
     check(captain.issues?.length === 1 && captain.issues[0].state === 'needs-you', 'the captain filed one needs-you issue');
     const standalone = threads.find(({ role, title }) => role !== 'captain' && role !== 'worker' && title === 'Make empty search results useful');
     check(Boolean(standalone), 'the demo also seeds a standalone thread');

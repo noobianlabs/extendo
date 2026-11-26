@@ -28,6 +28,12 @@ export const demoPullRequests = (): Record<string, PullRequest> => ({
     checks: 'passing', checksSummary: '4 checks passed', review: 'pending',
     draft: false, merged: false, mergeable: true, state: 'open',
   },
+  'extendo/crew-empty-state-layout': {
+    number: 228, title: 'Wrap the empty state in a status region', url: 'https://github.com/northstar/extendo/pull/228',
+    branch: 'extendo/crew-empty-state-layout', base: 'main', additions: 8, deletions: 1, changedFiles: 1,
+    checks: 'failing', checksSummary: '1 failing', review: 'changes-requested',
+    draft: false, merged: false, mergeable: false, state: 'open',
+  },
   'feat/swarm-audit': {
     number: 219, title: 'Audit empty-state copy across search surfaces', url: 'https://github.com/northstar/web/pull/219',
     branch: 'feat/swarm-audit', base: 'main', additions: 31, deletions: 12, changedFiles: 4,
@@ -189,14 +195,24 @@ function seedCrew(workspace: WorkspaceState, sessions: SessionStore, project: Pr
   });
   const copy = workspace.createThread(sessions, project, {
     title: 'Rework the empty-state copy', provider: 'demo', model: 'demo',
-    branch: 'extendo/crew-empty-state-copy', role: 'worker', captainId: captain.id,
+    branch: 'extendo/crew-empty-state-copy', base: 'main', baseCommit: checkout?.main, role: 'worker', captainId: captain.id,
   });
   const changelog = workspace.createThread(sessions, project, {
     title: 'Draft the changelog entry', provider: 'demo', model: 'demo',
-    branch: 'extendo/crew-changelog', role: 'worker', captainId: captain.id,
+    branch: 'extendo/crew-changelog', base: 'main', baseCommit: checkout?.main, role: 'worker', captainId: captain.id,
+  });
+  const layout = workspace.createThread(sessions, project, {
+    title: 'Wrap the empty state in a status region', provider: 'demo', model: 'demo',
+    branch: 'extendo/crew-empty-state-layout', base: 'main', baseCommit: checkout?.main, role: 'worker', captainId: captain.id,
+  });
+  const filters = workspace.createThread(sessions, project, {
+    title: 'Tighten the search filters', provider: 'demo', model: 'demo',
+    branch: 'extendo/crew-search-filters', base: 'main', baseCommit: checkout?.main, role: 'worker', captainId: captain.id,
   });
   useCheckout(workspace, sessions, copy, 'extendo/crew-empty-state-copy', checkout);
   useCheckout(workspace, sessions, changelog, 'extendo/crew-changelog', checkout);
+  useCheckout(workspace, sessions, layout, 'extendo/crew-empty-state-layout', checkout);
+  useCheckout(workspace, sessions, filters, 'extendo/crew-search-filters', checkout);
 
   sessions.appendMany(captain.sessionId, [
     { type: 'turn/start', data: { turnId: 'turn-crew-plan', provider: 'demo', model: 'demo' } },
@@ -233,12 +249,34 @@ function seedCrew(workspace: WorkspaceState, sessions: SessionStore, project: Pr
     { type: 'turn/end', data: { turnId: 'turn-crew-changelog', outcome: 'completed' } },
   ]);
 
+  sessions.appendMany(layout.sessionId, [
+    { type: 'turn/start', data: { turnId: 'turn-crew-layout', provider: 'demo', model: 'demo' } },
+    { type: 'user/message', data: { turnId: 'turn-crew-layout', messageId: 'crew-layout-user', content: 'Wrap the empty state in a status region so a screen reader announces it.' } },
+    { type: 'step/start', data: { turnId: 'turn-crew-layout', stepId: 'crew-layout-step' } },
+    { type: 'assistant/message', data: { turnId: 'turn-crew-layout', stepId: 'crew-layout-step', messageId: 'crew-layout-assistant', content: 'The empty state is a status region now and the clear action sits under the copy. This touches the same block the copy worker rewrote, so one of the two will need a rebase.' } },
+    { type: 'tool/call', data: { turnId: 'turn-crew-layout', stepId: 'crew-layout-step', call: { id: 'crew-layout-edit', name: 'demo_edit', input: { path: 'apps/web/src/search/EmptyState.tsx' } } } },
+    { type: 'tool/result', data: { turnId: 'turn-crew-layout', stepId: 'crew-layout-step', result: { callId: 'crew-layout-edit', name: 'demo_edit', output: { path: 'apps/web/src/search/EmptyState.tsx', simulated: true }, isError: false } } },
+    { type: 'step/end', data: { turnId: 'turn-crew-layout', stepId: 'crew-layout-step', outcome: 'completed' } },
+    { type: 'turn/end', data: { turnId: 'turn-crew-layout', outcome: 'completed' } },
+  ]);
+
+  sessions.appendMany(filters.sessionId, [
+    { type: 'turn/start', data: { turnId: 'turn-crew-filters', provider: 'demo', model: 'demo' } },
+    { type: 'user/message', data: { turnId: 'turn-crew-filters', messageId: 'crew-filters-user', content: 'Tighten the search filters so a filter change clears the stale result count.' } },
+    { type: 'step/start', data: { turnId: 'turn-crew-filters', stepId: 'crew-filters-step' } },
+    { type: 'assistant/message', data: { turnId: 'turn-crew-filters', stepId: 'crew-filters-step', messageId: 'crew-filters-assistant', content: 'The result count already comes from the filter state, so there is nothing to change. I left the branch empty rather than adding a change for its own sake.' } },
+    { type: 'step/end', data: { turnId: 'turn-crew-filters', stepId: 'crew-filters-step', outcome: 'completed' } },
+    { type: 'turn/end', data: { turnId: 'turn-crew-filters', outcome: 'completed' } },
+  ]);
+
   sessions.appendMany(captain.sessionId, [
     { type: 'crew/wake', data: { workerId: copy.id, workerSessionId: copy.sessionId, title: copy.title, turnId: 'turn-crew-copy', outcome: 'completed', report: 'The empty state now names the query and offers a clear action. The branch is ready for review.' } },
     { type: 'crew/wake', data: { workerId: changelog.id, workerSessionId: changelog.sessionId, title: changelog.title, turnId: 'turn-crew-changelog', outcome: 'completed', report: 'The changelog now notes that empty results name the query. One line, no other changes.' } },
+    { type: 'crew/wake', data: { workerId: layout.id, workerSessionId: layout.sessionId, title: layout.title, turnId: 'turn-crew-layout', outcome: 'completed', report: 'The empty state is a status region now and the clear action sits under the copy. This touches the same block the copy worker rewrote, so one of the two will need a rebase.' } },
+    { type: 'crew/wake', data: { workerId: filters.id, workerSessionId: filters.sessionId, title: filters.title, turnId: 'turn-crew-filters', outcome: 'completed', report: 'The result count already comes from the filter state, so there is nothing to change. I left the branch empty rather than adding a change for its own sake.' } },
     { type: 'turn/start', data: { turnId: 'turn-crew-review', provider: 'demo', model: 'demo' } },
     { type: 'step/start', data: { turnId: 'turn-crew-review', stepId: 'crew-review-step' } },
-    { type: 'assistant/message', data: { turnId: 'turn-crew-review', stepId: 'crew-review-step', messageId: 'crew-review-assistant', content: 'Both workers landed. The empty state names the query and the changelog carries the note. I filed the design check as an issue; the copy is ready for review.' } },
+    { type: 'assistant/message', data: { turnId: 'turn-crew-review', stepId: 'crew-review-step', messageId: 'crew-review-assistant', content: 'Four workers reported. Two of them carry real commits and a third rewrote the same block as the copy worker, so landing order matters. The filters worker found nothing to change and left its branch empty.' } },
     { type: 'step/end', data: { turnId: 'turn-crew-review', stepId: 'crew-review-step', outcome: 'completed' } },
     { type: 'turn/end', data: { turnId: 'turn-crew-review', outcome: 'completed' } },
   ]);

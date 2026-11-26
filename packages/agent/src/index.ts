@@ -77,6 +77,12 @@ export interface AgentRuntime {
   answer(sessionId: string, requestId: string, decision: ApprovalDecision): boolean;
   /** Delivers input to the running turn at its next step. Returns false when no turn is running. */
   steer(sessionId: string, input: string): boolean;
+  /**
+   * Ends the running turn and starts one with `input` after it settles. The cancelled turn keeps its
+   * own `turn/end` outcome, so its partial work is never mistaken for a completed turn. Resolves once
+   * the new turn has started; with no turn running it simply starts one.
+   */
+  interrupt(sessionId: string, input: string, options: SendOptions): Promise<TurnHandle>;
   /** Holds input until the running turn ends, then starts the next turn with it. */
   queue(sessionId: string, input: string, options: SendOptions): boolean;
   shutdown(): Promise<void>;
@@ -137,6 +143,14 @@ export class Agent implements AgentRuntime {
     pending.push(input.trim());
     this.steers.set(sessionId, pending);
     return true;
+  }
+
+  async interrupt(sessionId: string, input: string, options: SendOptions): Promise<TurnHandle> {
+    const turn = this.turns.get(sessionId);
+    if (!turn) return this.start(sessionId, input, options);
+    this.cancel(sessionId);
+    await turn.done;
+    return this.start(sessionId, input, options);
   }
 
   queue(sessionId: string, input: string, options: SendOptions): boolean {

@@ -9,11 +9,15 @@ import { startServer } from '../../apps/server/dist/index.js';
 export const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 export const outDir = process.env.EXTENDO_E2E_OUT ?? join(root, 'artifacts');
 
-/** Boots the real server on a throwaway home. `gh` can be pointed at a missing binary to test the honest path. */
-export async function boot({ gh } = {}) {
+/**
+ * Boots the real server on a throwaway home. `gh` can be pointed at a missing binary to test the
+ * honest path, and `env` reaches the provider registry, which is how a scripted run slows the demo
+ * provider enough to steer a turn while it is genuinely running.
+ */
+export async function boot({ gh, env } = {}) {
   const dataDir = mkdtempSync(join(tmpdir(), 'extendo-e2e-'));
   const server = await startServer({
-    dataDir, port: 0, env: {}, webRoot: join(root, 'apps/web/dist'),
+    dataDir, port: 0, env: env ?? {}, webRoot: join(root, 'apps/web/dist'),
     ...(gh ? { git: new GitService({ gh }) } : {}),
   });
   return {

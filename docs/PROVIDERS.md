@@ -5,6 +5,10 @@ The provider boundary is `Provider.stream(request): AsyncIterable<ModelChunk>`. 
 | Provider | Key | Configuration |
 | --- | --- | --- |
 | Demo | None | `extendo-demo`; scripted local responses, no real shell, network, or workspace writes |
+
+`EXTENDO_DEMO_DELAY` slows the demo provider's streamed text (milliseconds per fragment). It exists
+so a scripted end-to-end run can steer a worker while its turn is genuinely running; leave it unset
+for the normal demo speed.
 | Anthropic | `ANTHROPIC_API_KEY` | `ANTHROPIC_MODEL` |
 | OpenAI compatible | `OPENAI_API_KEY` | `OPENAI_BASE_URL` (including the API path such as `/v1`), `OPENAI_MODEL` |
 | DeepSeek | `DEEPSEEK_API_KEY` | `DEEPSEEK_BASE_URL`, `DEEPSEEK_MODEL` |

@@ -14,6 +14,8 @@ export interface DemoCheckout {
   root: string;
   remote: string;
   worktrees: Record<string, string>;
+  /** The commit the crew's workers were all cut from. */
+  main: string;
 }
 
 const files: Record<string, string> = {
@@ -109,6 +111,26 @@ it('names the query that found nothing', () => {
 });
 `;
 
+const mainChangelog = `# Changelog
+
+## Unreleased
+
+- Search keeps its filters when you switch tabs.
+- The results list no longer re-renders on every keystroke.
+`;
+
+const layoutEmptyState = `export function EmptyState({ query }: { query?: string }) {
+  return (
+    <section className="empty" role="status">
+      <p>{query ? \`Nothing found for \u201c\${query}\u201d\` : 'Nothing found'}</p>
+      <p>
+        Try a broader term, or <a href="/search?filters=">clear the filters</a>.
+      </p>
+    </section>
+  );
+}
+`;
+
 const editedReadme = `# Northstar UI
 
 The search interface for the Northstar documentation site. One input, three surfaces:
@@ -148,7 +170,7 @@ export async function seedDemoRepo(root: string, remote: string): Promise<DemoCh
     "const [state, setState] = useState(initial);",
     "const [state, setState] = useState({ ...initial, filters: initial.filters ?? [] });",
   ));
-  write(root, 'docs/CHANGELOG.md', files['docs/CHANGELOG.md']!.replace('- Search keeps its filters when you switch tabs.', '- Search keeps its filters when you switch tabs.\n- The results list no longer re-renders on every keystroke.'));
+  write(root, 'docs/CHANGELOG.md', mainChangelog);
   await git(root, ['add', '-A']);
   await git(root, ['commit', '-m', 'Persist search filters across tabs']);
 
@@ -210,13 +232,30 @@ export async function seedDemoRepo(root: string, remote: string): Promise<DemoCh
   await git(root, ['push', '-u', 'origin', crewChangelog]);
   const crewChangelogPath = join(parent, 'crew-changelog');
   await git(root, ['worktree', 'add', crewChangelogPath, crewChangelog]);
-  write(crewChangelogPath, 'docs/CHANGELOG.md', files['docs/CHANGELOG.md']!.replace(
-    '- Search keeps its filters when you switch tabs.',
-    '- Search keeps its filters when you switch tabs.\n- Empty results name the query that found nothing.',
-  ));
+  write(crewChangelogPath, 'docs/CHANGELOG.md', `${mainChangelog}- Empty results name the query that found nothing.\n`);
   await git(crewChangelogPath, ['add', '-A']);
   await git(crewChangelogPath, ['commit', '-m', 'Note the empty-state copy in the changelog']);
   worktrees[crewChangelog] = crewChangelogPath;
 
-  return { root, remote, worktrees };
+  // A third worker rewrites the same file the copy worker touched, so landing it after that one
+  // conflicts. The fourth has a branch and nothing on it: the surface has to say that, not draw an
+  // empty diff that reads like zero work.
+  const crewLayout = 'extendo/crew-empty-state-layout';
+  await git(root, ['branch', crewLayout, 'main']);
+  await git(root, ['push', '-u', 'origin', crewLayout]);
+  const crewLayoutPath = join(parent, 'crew-empty-state-layout');
+  await git(root, ['worktree', 'add', crewLayoutPath, crewLayout]);
+  write(crewLayoutPath, 'apps/web/src/search/EmptyState.tsx', layoutEmptyState);
+  await git(crewLayoutPath, ['add', '-A']);
+  await git(crewLayoutPath, ['commit', '-m', 'Wrap the empty state in a status region']);
+  worktrees[crewLayout] = crewLayoutPath;
+
+  const crewFilters = 'extendo/crew-search-filters';
+  await git(root, ['branch', crewFilters, 'main']);
+  await git(root, ['push', '-u', 'origin', crewFilters]);
+  const crewFiltersPath = join(parent, 'crew-search-filters');
+  await git(root, ['worktree', 'add', crewFiltersPath, crewFilters]);
+  worktrees[crewFilters] = crewFiltersPath;
+
+  return { root, remote, worktrees, main: (await git(root, ['rev-parse', 'main'])).trim() };
 }

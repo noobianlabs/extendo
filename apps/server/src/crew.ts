@@ -2,9 +2,10 @@ import { randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import { z } from 'zod';
 import {
-  deriveThreadState,
-  type AgentStatus, type Ctx, type Issue, type IssueComment, type IssueState, type PullRequest,
-  type Registry, type Thread, type ThreadRole, type Tool, type ToolCtx, type TurnOutcome,
+  deriveThreadState, openTurn, steerInOpenTurn,
+  type AgentStatus, type BranchDiff, type Ctx, type Issue, type IssueComment, type IssueState, type Landed,
+  type PullRequest, type Registry, type SteerMode, type SteerPin, type Thread, type ThreadRole, type Tool,
+  type ToolCtx, type TurnOutcome,
 } from '@extendo/contracts';
 import type { AgentRuntime, SystemSection } from '@extendo/agent';
 import { projectMessages, type SessionStore } from '@extendo/session';
@@ -118,10 +119,14 @@ export class CrewService {
       provider: captain.provider,
       model: captain.model,
       branch: worktree.branch,
+      base: worktree.base,
+      baseCommit: worktree.baseCommit,
       role: 'worker',
       captainId: captain.id,
     });
-    this.options.workspace.setThreadCheckout(row.sessionId, { cwd: worktree.path, branch: worktree.branch, worktree: worktree.path });
+    this.options.workspace.setThreadCheckout(row.sessionId, {
+      cwd: worktree.path, branch: worktree.branch, worktree: worktree.path, base: worktree.base, baseCommit: worktree.baseCommit,
+    });
     this.options.sessions.move(row.sessionId, worktree.path);
     const handle = this.options.agent.start(row.sessionId, input.brief, {
       provider: row.provider,
@@ -150,12 +155,32 @@ export class CrewService {
     };
   }
 
-  async message(captain: ThreadRow, workerId: string, text: string): Promise<Record<string, unknown>> {
+  /**
+   * Sends a worker a message. An idle worker starts a turn. A running worker is steered, and the mode
+   * says how: `queue` is delivered at its next step boundary, `interrupt` ends the current turn first
+   * and starts a new one with the message. The mode is written to the worker's own log either way, so
+   * "it was queued" and "its turn was interrupted" are different durable facts, not a UI hint.
+   */
+  async message(captain: ThreadRow, workerId: string, text: string, mode: SteerMode = 'queue'): Promise<Record<string, unknown>> {
     const worker = this.worker(captain, workerId);
     const status = this.options.agent.status(worker.sessionId);
+    const turnId = openTurn(this.options.sessions.replay(worker.sessionId));
     if (status === 'working' || status === 'waiting') {
-      this.options.agent.steer(worker.sessionId, text);
-      return { threadId: worker.id, delivered: 'steer' };
+      if (mode === 'interrupt') {
+        this.options.sessions.append(worker.sessionId, { type: 'crew/steer', data: { workerId: worker.id, mode, text, turnId } });
+        const started = await this.options.agent.interrupt(worker.sessionId, text, {
+          provider: worker.provider,
+          model: worker.model,
+          interactive: false,
+          approve: (call, context) => withinWorktree(call, context),
+        });
+        void started.done.catch((error) => this.options.ctx.logger.warn(`worker ${worker.id} failed: ${error instanceof Error ? error.message : String(error)}`));
+        return { threadId: worker.id, delivered: 'interrupt', turnId };
+      }
+      if (this.options.agent.steer(worker.sessionId, text)) {
+        this.options.sessions.append(worker.sessionId, { type: 'crew/steer', data: { workerId: worker.id, mode: 'queue', text, turnId } });
+        return { threadId: worker.id, delivered: 'queue', turnId };
+      }
     }
     const handle = this.options.agent.start(worker.sessionId, text, {
       provider: worker.provider,
@@ -166,6 +191,40 @@ export class CrewService {
     void handle.done.catch((error) => this.options.ctx.logger.warn(`worker ${worker.id} failed: ${error instanceof Error ? error.message : String(error)}`));
     return { threadId: worker.id, delivered: 'turn' };
   }
+
+  /** The worker's branch against the branch it was cut from: its commits and the merge diff. */
+  async diff(captain: ThreadRow, workerId: string): Promise<BranchDiff> {
+    const worker = this.worker(captain, workerId);
+    if (!worker.branch) throw new Error(`${worker.title} has no branch to review`);
+    const project = this.options.workspace.project(captain.projectId);
+    const cwd = worker.worktree ?? project?.path ?? worker.cwd;
+    return this.options.git.compare(cwd, { base: workerBase(worker), branch: worker.branch, from: worker.baseCommit });
+  }
+
+  /**
+   * Lands a worker's branch on the branch the crew was cut from. The merge is proven clean before
+   * anything moves, so a conflict leaves every branch and worktree where it was; the branch and the
+   * worktree stay afterwards, because landing work is not the same as discarding the place it was
+   * written in.
+   */
+  async integrate(captain: ThreadRow, workerId: string, target?: string): Promise<{ landed: Landed; worker: CrewMemberSummary }> {
+    const worker = this.worker(captain, workerId);
+    if (!worker.branch) throw new Error(`${worker.title} has no branch to land`);
+    const project = this.options.workspace.project(captain.projectId);
+    if (!project) throw new Error('The captain has no project to land work in');
+    const onto = target?.trim() || workerBase(worker);
+    const result = await this.options.git.integrate(project.path, { target: onto, branch: worker.branch });
+    const landed: Landed = { target: result.target, commit: result.commit, shortCommit: result.shortCommit, mode: result.mode, at: new Date().toISOString() };
+    this.options.sessions.append(captain.sessionId, {
+      type: 'crew/land',
+      data: {
+        workerId: worker.id, branch: result.branch, target: result.target,
+        commit: result.commit, shortCommit: result.shortCommit, mode: result.mode,
+      },
+    });
+    return { landed, worker: await this.summary(worker) };
+  }
+
 
   async archive(captain: ThreadRow, workerId: string): Promise<Record<string, unknown>> {
     const worker = this.worker(captain, workerId);
@@ -244,20 +303,27 @@ export class CrewService {
       ? await this.options.pullRequests.read({ cwd: worker.cwd, branch: worker.branch }).catch(() => undefined)
       : undefined;
     const openIssue = this.options.workspace.issues({ assigneeId: worker.id }).find((issue) => issue.state !== 'done' && issue.state !== 'canceled');
+    const captain = worker.captainId ? this.options.workspace.thread(worker.captainId) : undefined;
+    const landed = captain ? landingsIn(this.options.sessions.replay(captain.sessionId), worker.id).at(-1) : undefined;
+    const status = this.options.agent.status(worker.sessionId);
     return {
       threadId: worker.id,
       sessionId: worker.sessionId,
       title: worker.title,
       role: worker.role ?? 'worker',
-      status: this.options.agent.status(worker.sessionId),
+      status,
       state,
       branch: worker.branch,
+      base: worker.base,
+      baseCommit: worker.baseCommit,
       worktree: worker.worktree,
       report: worker.report,
       reportAt: worker.reportAt,
       pullRequest,
       issueId: openIssue?.id,
       archived: worker.archived,
+      landed,
+      steer: status === 'working' || status === 'waiting' ? steerInOpenTurn(events) : undefined,
     };
   }
 
@@ -396,12 +462,31 @@ export interface CrewMemberSummary {
   status: AgentStatus;
   state: Thread['state'];
   branch?: string;
+  base?: string;
+  baseCommit?: string;
   worktree?: string;
   report?: string;
   reportAt?: string;
   pullRequest?: PullRequest;
   issueId?: string;
   archived?: boolean;
+  landed?: Landed;
+  steer?: SteerPin;
+}
+
+/** The branch a worker's own branch was cut from. A worker without one cannot be reviewed or landed. */
+function workerBase(worker: ThreadRow): string {
+  if (!worker.base) throw new Error(`${worker.title} does not record the branch it was cut from, so there is nothing to compare or land against`);
+  return worker.base;
+}
+
+/** The landings the captain's log records for one worker, oldest first. */
+function landingsIn(events: ReturnType<SessionStore['replay']>, workerId: string): Landed[] {
+  return events.flatMap((event) => {
+    if (event.type !== 'crew/land' || event.data.workerId !== workerId) return [];
+    const { target, commit, shortCommit, mode } = event.data;
+    return [{ target, commit, shortCommit, mode, at: event.ts }];
+  });
 }
 
 /** A worker's write is approved only when its path stays inside the worker's own worktree. */
@@ -422,7 +507,12 @@ export function crewTools(crew: CrewService): Tool[] {
   const captain = (ctx: ToolCtx): ThreadRow => crew.captainFor(ctx.sessionId);
   const createInput = z.object({ title: z.string().min(1).max(240), brief: z.string().min(1).max(20_000), base: z.string().min(1).max(240).optional() });
   const readInput = z.object({ threadId: z.string().min(1).max(128), transcript: z.boolean().optional() });
-  const messageInput = z.object({ threadId: z.string().min(1).max(128), text: z.string().min(1).max(20_000) });
+  const messageInput = z.object({
+    threadId: z.string().min(1).max(128),
+    text: z.string().min(1).max(20_000),
+    mode: z.enum(['queue', 'interrupt']).optional(),
+  });
+  const landInput = z.object({ threadId: z.string().min(1).max(128), target: z.string().min(1).max(240).optional() });
   const waitInput = z.object({ threadIds: z.array(z.string().min(1).max(128)).min(1).max(20), timeoutMs: z.number().int().min(1).max(MAX_WAIT_MS).optional() });
   const archiveInput = z.object({ threadId: z.string().min(1).max(128) });
   const issueCreateInput = z.object({
@@ -475,12 +565,37 @@ export function crewTools(crew: CrewService): Tool[] {
     },
     {
       name: 'crew.message',
-      description: 'Send a worker a correction or a new brief. A worker that is running receives it as a steer; an idle worker starts a new turn.',
+      description: 'Send a worker a correction or a new brief. An idle worker starts a new turn. A running worker is steered: mode "queue" delivers it at its next step boundary, mode "interrupt" ends the current turn and starts one with it. The default is queue.',
       readOnly: false,
       input: messageInput,
       async execute(input, ctx) {
         const value = input as z.infer<typeof messageInput>;
-        return crew.message(captain(ctx), value.threadId, value.text);
+        return crew.message(captain(ctx), value.threadId, value.text, value.mode ?? 'queue');
+      },
+    },
+    {
+      name: 'crew.diff',
+      description: 'Review a worker branch against the branch it was cut from: its commits, and each changed file with its status and line counts. No file contents, so read the file in the worktree when you need the lines.',
+      readOnly: true,
+      input: readInput,
+      async execute(input, ctx) {
+        const value = input as z.infer<typeof readInput>;
+        const diff = await crew.diff(captain(ctx), value.threadId);
+        return {
+          base: diff.base, branch: diff.branch, empty: diff.empty,
+          commits: diff.commits.map(({ shortSha, subject, author }) => ({ shortSha, subject, author })),
+          files: diff.files.map(({ path, status, additions, deletions, binary }) => ({ path, status, additions, deletions, binary })),
+        } as unknown as Record<string, unknown>;
+      },
+    },
+    {
+      name: 'crew.land',
+      description: 'Land a worker branch on the branch the crew was cut from. The merge is proven clean first: a conflict is refused with its paths and nothing moves. Fast-forwards when the target has not moved. The worker branch and its worktree stay afterwards.',
+      readOnly: false,
+      input: landInput,
+      async execute(input, ctx) {
+        const value = input as z.infer<typeof landInput>;
+        return crew.integrate(captain(ctx), value.threadId, value.target) as unknown as Record<string, unknown>;
       },
     },
     {
@@ -548,8 +663,9 @@ export const captainInstructions = `You are a captain. You direct a crew of work
 
 - Delegate work to a worker with crew.create. Give it a title and a complete brief; it starts immediately.
 - Use crew.wait to block until a worker finishes. Never poll crew.list in a loop.
-- Read a worker's report with crew.read. Only ask for its transcript when the report is not enough.
-- Send a correction or a new brief with crew.message. Do not send a worker a message just to say you are waiting.
+- Read a worker's report with crew.read. Review its branch with crew.diff before you land it; ask for the transcript only when the diff and the report are not enough.
+- Send a correction or a new brief with crew.message. A running worker takes mode "queue" at its next step, or "interrupt" to end its turn and start over with your message. Do not send a worker a message just to say you are waiting.
+- Land finished work with crew.land. It refuses a conflicting merge and leaves every branch where it was, so read the refusal and send the worker a correction instead of retrying.
 - File an issue when work outlives this turn or needs a person's decision. Move it through its states as the work moves.
 - When you report to the person, say what changed: what a worker shipped, what failed, and what needs them. One short paragraph, not a status table.
 - A worker completing wakes you once. If you already have its report, do not ask for it again.`;

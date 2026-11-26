@@ -29,6 +29,14 @@ own branch — from the command palette ("New thread in its own worktree"), or f
 that panel — so two threads never edit one checkout. Removing a worktree or deleting a thread first asks
 a confirmation that names the uncommitted files it would destroy.
 
+A captain thread directs a crew. `crew.create` starts a worker in its own worktree and branch, and the
+worker's report comes back as a note in the captain's own conversation. The **Crew** tab is where the
+captain's work gets read and landed: open a worker to see its branch's commits and the real merge diff
+per file against the branch it was cut from, land that branch on that base without a force anywhere (a
+conflict is refused with its paths and nothing moves; a target that has not advanced is fast-forwarded
+rather than padded with a merge commit), and steer a worker that is still running — `Queue` delivers at
+its next step, `Interrupt` ends the turn and starts one with your message.
+
 Extendo never force-pushes, and never stages `.env`-style paths, private keys, or credential files
 unless you say so twice. Pushing needs a remote named `origin`; opening a pull request needs `gh`
 installed and signed in, and when either is missing the panel says what is missing instead of offering a

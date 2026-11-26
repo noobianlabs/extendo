@@ -1,5 +1,8 @@
 import type { AgentRuntime } from '@extendo/agent';
-import { deriveThreadState, projectSubagents, type CrewMember, type PullRequest, type Subagent, type Thread } from '@extendo/contracts';
+import {
+  deriveThreadState, projectSubagents, steerInOpenTurn,
+  type CrewMember, type Landed, type PullRequest, type Subagent, type Thread,
+} from '@extendo/contracts';
 import type { PullRequestReader } from '@extendo/pullrequests';
 import type { SessionStore } from '@extendo/session';
 import type { ThreadRow, WorkspaceState } from './state.js';
@@ -64,7 +67,10 @@ export class ThreadViewer {
     const [pullRequest, derived] = await Promise.all([this.pullRequest(row), this.derive(row)]);
     const captain = row.role === 'captain';
     const [crew, issues] = captain
-      ? await Promise.all([this.crew(row), Promise.resolve(this.options.workspace.issues({ captainId: row.id }))])
+      ? await Promise.all([
+        this.crew(row, this.options.sessions.replay(row.sessionId)),
+        Promise.resolve(this.options.workspace.issues({ captainId: row.id })),
+      ])
       : [undefined, undefined];
     return {
       ...row,
@@ -79,13 +85,23 @@ export class ThreadViewer {
     };
   }
 
-  /** A captain's workers, each with its own state, report, and open pull request. */
-  private async crew(captain: ThreadRow): Promise<CrewMember[]> {
+  /**
+   * A captain's workers, each with its own state, report, and open pull request. The landings come
+   * from the captain's own log, and a running worker's newest steer from its own, so the row shows
+   * durable facts rather than something the page remembered.
+   */
+  private async crew(captain: ThreadRow, captainEvents: ReturnType<SessionStore['replay']>): Promise<CrewMember[]> {
     const workers = this.options.workspace.workersOf(captain.id).filter((worker) => !worker.archived);
     return Promise.all(workers.map(async (worker) => {
       const view = await this.view(worker);
       const issue = this.options.workspace.issues({ assigneeId: worker.id })
         .find((candidate) => candidate.state !== 'done' && candidate.state !== 'canceled');
+      const landed: Landed | undefined = captainEvents.flatMap((event) => {
+        if (event.type !== 'crew/land' || event.data.workerId !== worker.id) return [];
+        const { target, commit, shortCommit, mode } = event.data;
+        return [{ target, commit, shortCommit, mode, at: event.ts }];
+      }).at(-1);
+      const running = view.status === 'working' || view.status === 'waiting';
       return {
         threadId: view.id,
         sessionId: view.sessionId,
@@ -94,12 +110,16 @@ export class ThreadViewer {
         status: view.status,
         state: view.state,
         branch: view.branch,
+        base: view.base,
+        baseCommit: view.baseCommit,
         worktree: view.worktree,
         report: view.report,
         reportAt: view.reportAt,
         pullRequest: view.pullRequest,
         issueId: issue?.id,
         archived: view.archived,
+        landed,
+        steer: running ? steerInOpenTurn(this.options.sessions.replay(worker.sessionId)) : undefined,
       };
     }));
   }

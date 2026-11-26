@@ -412,3 +412,178 @@ describe('capabilities and pull requests', () => {
     expect(new GitError('blocked', 'no').code).toBe('blocked');
   });
 });
+
+describe('landing a branch', () => {
+  /** A repository with `main`, a worker branch cut from it, and a commit on the worker. */
+  async function crew(): Promise<{ path: string; worker: Awaited<ReturnType<GitService['createWorktree']>> }> {
+    const path = await repository();
+    const worker = await git.createWorktree(path, { title: 'Name the empty state' });
+    await writeFile(join(worker.path, 'src/app.ts'), 'export const answer = 42;\n');
+    await writeFile(join(worker.path, 'src/empty.ts'), "export const empty = 'No results for the query';\n");
+    await git.commitAll(worker.path, 'Name the query in the empty state');
+    return { path, worker };
+  }
+
+  it('fast-forwards when the target has not moved, without a merge commit', async () => {
+    const { path, worker } = await crew();
+    const before = await run(path, ['rev-parse', 'main']);
+    const landed = await git.integrate(path, { target: 'main', branch: worker.branch });
+    expect(landed.mode).toBe('fast-forward');
+    expect(landed.previous).toBe(before.trim());
+    expect(landed.commit).toBe((await run(path, ['rev-parse', worker.branch])).trim());
+    expect((await run(path, ['rev-parse', 'main'])).trim()).toBe(landed.commit);
+    expect(await run(path, ['log', '-1', '--format=%s', 'main'])).toContain('Name the query');
+    expect(await run(path, ['rev-list', '--count', `main~1..main`])).toBe('1\n');
+    expect((await run(path, ['log', '--format=%s', '-1', 'main'])).trim()).toBe('Name the query in the empty state');
+    expect((await git.status(path)).files).toEqual([]);
+  });
+
+  it('creates a real merge commit with both parents when the target moved', async () => {
+    const { path, worker } = await crew();
+    await writeFile(join(path, 'README.md'), '# Northstar\n\nMoved on.\n');
+    await run(path, ['add', '.']);
+    await run(path, ['commit', '-m', 'Document the surface']);
+    const before = (await run(path, ['rev-parse', 'main'])).trim();
+    const landed = await git.integrate(path, { target: 'main', branch: worker.branch });
+    expect(landed.mode).toBe('merge');
+    expect(landed.previous).toBe(before);
+    const parents = (await run(path, ['log', '-1', '--format=%P', 'main'])).trim().split(' ');
+    expect(parents).toHaveLength(2);
+    expect(parents[0]).toBe(before);
+    expect(parents[1]).toBe((await run(path, ['rev-parse', worker.branch])).trim());
+    expect(await readFile(join(path, 'src/empty.ts'), 'utf8')).toContain('No results for the query');
+    expect(await readFile(join(path, 'README.md'), 'utf8')).toContain('Moved on.');
+  });
+
+  it('refuses a conflicting landing and leaves the target at its original commit', async () => {
+    const { path, worker } = await crew();
+    await writeFile(join(path, 'src/app.ts'), 'export const answer = 0;\n');
+    await run(path, ['add', '.']);
+    await run(path, ['commit', '-m', 'Change the same line elsewhere']);
+    const before = (await run(path, ['rev-parse', 'main'])).trim();
+    const head = (await run(path, ['rev-parse', 'HEAD'])).trim();
+    await expect(git.integrate(path, { target: 'main', branch: worker.branch })).rejects.toMatchObject({
+      code: 'conflict',
+      detail: { paths: ['src/app.ts'], target: 'main', branch: worker.branch },
+    });
+    expect((await run(path, ['rev-parse', 'main'])).trim()).toBe(before);
+    expect((await run(path, ['rev-parse', 'HEAD'])).trim()).toBe(head);
+    expect((await git.status(path)).files).toEqual([]);
+    expect(await run(path, ['status', '--porcelain'])).toBe('');
+    expect(await readFile(join(path, 'src/app.ts'), 'utf8')).toBe('export const answer = 0;\n');
+    expect((await git.worktrees(path)).length).toBe(2);
+  });
+
+  it('refuses to land into a checkout that has uncommitted work, before anything moves', async () => {
+    const { path, worker } = await crew();
+    await writeFile(join(path, 'src/app.ts'), 'export const answer = 7;\n');
+    const before = (await run(path, ['rev-parse', 'main'])).trim();
+    await expect(git.integrate(path, { target: 'main', branch: worker.branch })).rejects.toMatchObject({
+      code: 'unsafe',
+      message: expect.stringContaining('uncommitted changes'),
+    });
+    expect((await run(path, ['rev-parse', 'main'])).trim()).toBe(before);
+    expect(await readFile(join(path, 'src/app.ts'), 'utf8')).toBe('export const answer = 7;\n');
+  });
+
+  it('keeps the worker branch and its worktree after landing', async () => {
+    const { path, worker } = await crew();
+    await git.integrate(path, { target: 'main', branch: worker.branch });
+    expect((await run(path, ['rev-parse', '--verify', `refs/heads/${worker.branch}`])).trim()).toBeTruthy();
+    expect(await readFile(join(worker.path, 'src/empty.ts'), 'utf8')).toContain('No results');
+    expect((await git.status(worker.path)).branch).toBe(worker.branch);
+    expect((await git.worktrees(path)).map((entry) => entry.path)).toContain(worker.path);
+  });
+
+  it('refuses to land a branch on itself or one with nothing new', async () => {
+    const path = await repository();
+    await expect(git.integrate(path, { target: 'main', branch: 'main' })).rejects.toMatchObject({ code: 'unsafe' });
+    await run(path, ['branch', 'empty-family', 'main']);
+    await expect(git.integrate(path, { target: 'main', branch: 'empty-family' })).rejects.toMatchObject({ code: 'unsafe' });
+    expect((await run(path, ['log', '-1', '--format=%s'])).trim()).toBe('Initial commit');
+  });
+});
+
+describe('comparing a branch with its base', () => {
+  it('lists the commits and the merge diff a landing would bring', async () => {
+    const path = await repository();
+    const worker = await git.createWorktree(path, { title: 'Name the empty state' });
+    await writeFile(join(worker.path, 'src/app.ts'), 'export const answer = 42;\nexport const extra = true;\n');
+    await writeFile(join(worker.path, 'src/empty.ts'), "export const empty = 'No results for the query';\n");
+    await git.commitAll(worker.path, 'Name the query in the empty state');
+    await writeFile(join(worker.path, 'src/empty.ts'), "export const empty = 'Nothing found for the query';\n");
+    await git.commitAll(worker.path, 'Say nothing found instead of no results');
+
+    const diff = await git.compare(path, { base: 'main', branch: worker.branch });
+    expect(diff).toMatchObject({ base: 'main', branch: worker.branch, empty: false });
+    expect(diff.commits.map(({ subject }) => subject)).toEqual([
+      'Say nothing found instead of no results',
+      'Name the query in the empty state',
+    ]);
+    expect(diff.commits.every(({ sha, shortSha }) => sha.startsWith(shortSha))).toBe(true);
+    expect(diff.files.map(({ path, status }) => ({ path, status }))).toEqual([
+      { path: 'src/app.ts', status: 'modified' },
+      { path: 'src/empty.ts', status: 'added' },
+    ]);
+    const added = diff.files.find(({ path }) => path === 'src/empty.ts')!;
+    expect(added.before).toBe('');
+    expect(added.after).toContain('Nothing found for the query');
+    expect(added.additions).toBe(1);
+    const modified = diff.files.find(({ path }) => path === 'src/app.ts')!;
+    expect(modified.before).toBe('export const answer = 41;\n');
+    expect(modified.after).toContain('export const extra = true;');
+    expect(modified.additions).toBe(2);
+  });
+
+  it('measures from the merge base, not from the base tip', async () => {
+    const path = await repository();
+    const worker = await git.createWorktree(path, { title: 'Sideways' });
+    await writeFile(join(worker.path, 'src/side.ts'), 'export const side = 1;\n');
+    await git.commitAll(worker.path, 'Add the side file');
+    await writeFile(join(path, 'README.md'), '# Northstar\n\nUnrelated work on main.\n');
+    await run(path, ['add', '.']);
+    await run(path, ['commit', '-m', 'Move main on']);
+
+    const diff = await git.compare(path, { base: 'main', branch: worker.branch });
+    expect(diff.files.map(({ path }) => path)).toEqual(['src/side.ts']);
+    expect(diff.commits).toHaveLength(1);
+    expect(diff.mergeBase).toBe((await run(path, ['merge-base', 'main', worker.branch])).trim());
+  });
+
+  it('says a branch with no commits is empty instead of showing a zero-file diff', async () => {
+    const path = await repository();
+    const worker = await git.createWorktree(path, { title: 'Nothing yet' });
+    const diff = await git.compare(path, { base: 'main', branch: worker.branch });
+    expect(diff).toEqual({ base: 'main', branch: worker.branch, mergeBase: (await run(path, ['rev-parse', 'main'])).trim(), commits: [], files: [], empty: true });
+  });
+
+  it('names a missing branch rather than reporting an empty diff', async () => {
+    const path = await repository();
+    await expect(git.compare(path, { base: 'main', branch: 'extendo/gone' })).rejects.toMatchObject({ code: 'failed' });
+  });
+});
+
+describe('reviewing a branch after it landed', () => {
+  it('keeps measuring from the fork point, so a landed branch still reviews', async () => {
+    const path = await repository();
+    const worker = await git.createWorktree(path, { title: 'Name the empty state' });
+    expect(worker.baseCommit).toBe((await run(path, ['rev-parse', 'main'])).trim());
+    await writeFile(join(worker.path, 'src/empty.ts'), "export const empty = 'No results for the query';\n");
+    await git.commitAll(worker.path, 'Name the query in the empty state');
+
+    const before = await git.compare(path, { base: 'main', branch: worker.branch, from: worker.baseCommit });
+    expect(before.empty).toBe(false);
+    await git.integrate(path, { target: 'main', branch: worker.branch });
+
+    const after = await git.compare(path, { base: 'main', branch: worker.branch, from: worker.baseCommit });
+    expect(after.empty).toBe(false);
+    expect(after.commits.map(({ subject }) => subject)).toEqual(['Name the query in the empty state']);
+    expect(after.files.map(({ path: file, status }) => ({ path: file, status }))).toEqual([{ path: 'src/empty.ts', status: 'added' }]);
+    expect(after).toEqual(before);
+
+    // Without a recorded fork point the merge base collapses onto the branch tip, which is why the
+    // thread row carries the commit instead of only the branch name.
+    const collapsed = await git.compare(path, { base: 'main', branch: worker.branch });
+    expect(collapsed.empty).toBe(true);
+  });
+});

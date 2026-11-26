@@ -112,11 +112,14 @@ export function ChatSurface({
                     );
                   }
                   if (message.role === 'notice') {
+                    const landed = message.kind === 'crew-land';
                     return (
-                      <article key={message.id} className={styles.notice} data-outcome={message.outcome} aria-label="Crew report">
+                      <article key={message.id} className={styles.notice} data-kind={message.kind}
+                        data-outcome={landed ? undefined : message.outcome}
+                        aria-label={landed ? 'Crew landing' : 'Crew report'}>
                         <div className={styles.noticeHead}>
                           <strong>{message.title}</strong>
-                          <span>{message.outcome === 'completed' ? 'finished' : message.outcome}</span>
+                          <span>{landed ? 'landed' : message.outcome === 'completed' ? 'finished' : message.outcome}</span>
                         </div>
                         <div dir="auto">{message.content}</div>
                       </article>

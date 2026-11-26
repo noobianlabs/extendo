@@ -251,7 +251,7 @@ function Terminal({ activity }: { activity: Activity[] }) {
 
 export function Inspector({
   thread, project, messages, status, now, tab: controlled, onTabChange, onClose, onSteer, onStop, onApproval,
-  revision, onThread, onDeleted,
+  revision, onThread, onDeleted, onOpenThread,
 }: {
   thread?: Thread;
   project?: Project;
@@ -268,6 +268,8 @@ export function Inspector({
   revision: number;
   onThread: (thread: Thread) => void;
   onDeleted: (threadId: string) => void;
+  /** Opens another thread, so a captain's crew row can lead to the worker it names. */
+  onOpenThread?: (threadId: string) => void;
 }) {
   const [ownTab, setTab] = useState<InspectorTab>('Overview');
   const tab = controlled ?? ownTab;
@@ -433,7 +435,7 @@ export function Inspector({
       aria-label={shown.includes(name) ? undefined : name}
       className={styles.panel} hidden={active !== name} tabIndex={0}>
       {active === name && (!thread && name !== 'Preview' ? <p className={styles.empty}>Open a thread to inspect its work.</p>
-        : name === 'Crew' ? <CrewPanel thread={thread} now={now} />
+        : name === 'Crew' ? <CrewPanel thread={thread} now={now} onThread={onThread} onOpenThread={onOpenThread} />
         : name === 'Subagents' ? <SubagentsPanel thread={thread} now={now} onSteer={onSteer} onStop={onStop} onApproval={onApproval} />
         : name === 'Preview' ? <PreviewPane thread={thread} now={now} />
         : !thread ? <p className={styles.empty}>Open a thread to inspect its work.</p>

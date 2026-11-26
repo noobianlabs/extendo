@@ -1,7 +1,7 @@
 import type { IncomingMessage, Server } from 'node:http';
 import type { Duplex } from 'node:stream';
 import { WebSocket, WebSocketServer } from 'ws';
-import { rpcRequestSchema, type RpcEventName, type RpcId, type RpcServerFrame } from '@extendo/contracts';
+import { rpcRequestSchema, type RpcEventName, type RpcId, type RpcServerFrame, type Thread } from '@extendo/contracts';
 import { decideOrigin, describeOrigin, resolveOriginPolicy, type OriginPolicy } from './origin.js';
 import type { Runtime } from './runtime.js';
 
@@ -37,6 +37,27 @@ export function attachRpc(server: Server, runtime: Runtime, policy: OriginPolicy
 
   let scheduled: NodeJS.Timeout | undefined;
   const dirty = new Set<string>();
+
+  /**
+   * Snapshots the threads a change touches. A worker's turn moves what its captain's crew row shows,
+   * so the captain's snapshot goes out with it: without that, a captain sitting on its own page would
+   * never see a worker start, finish, or take a steer without reloading.
+   */
+  async function snapshotsFor(ids: string[]): Promise<Map<string, Thread>> {
+    const snapshots = new Map<string, Thread>();
+    for (const id of ids) {
+      const thread = await viewer.get(id).catch(() => undefined);
+      if (!thread) continue;
+      snapshots.set(id, thread);
+      if (thread.role !== 'worker' || !thread.captainId) continue;
+      const captain = workspace.thread(thread.captainId);
+      if (!captain || snapshots.has(captain.sessionId)) continue;
+      const snapshot = await viewer.get(captain.sessionId).catch(() => undefined);
+      if (snapshot) snapshots.set(captain.sessionId, snapshot);
+    }
+    return snapshots;
+  }
+
   function refresh(sessionId: string) {
     dirty.add(sessionId);
     if (scheduled) return;
@@ -45,11 +66,13 @@ export function attachRpc(server: Server, runtime: Runtime, policy: OriginPolicy
       scheduled = undefined;
       const ids = [...dirty];
       dirty.clear();
-      for (const id of ids) {
-        void viewer.get(id).then((thread) => {
-          if (thread) for (const peer of subscriptions.keys()) send(peer, { event: 'thread/updated', data: { thread } });
-        }).catch(() => {});
-      }
+      void snapshotsFor(ids).then((snapshots) => {
+        for (const [target, thread] of snapshots) {
+          for (const [peer, sessionIds] of subscriptions) {
+            if (sessionIds.has(target)) send(peer, { event: 'thread/updated', data: { thread } });
+          }
+        }
+      }).catch(() => {});
     }, 120);
     timers.add(scheduled);
   }

@@ -123,6 +123,36 @@ substrate's own memory — the strongest case there is for the mono rule.
   explanation instead of a disabled control that lies about why, and a refusal that says which rail it
   hit. The surface's honesty *is* its design: a status read is the only source it has.
 
+## The crew surface (v0.6)
+
+A captain's crew row is where a person decides whether a worker's work is real and whether it should
+land. Three things follow from the identity rather than from a dashboard convention.
+
+- **The review is the branch, not a preview of it.** Opening a worker shows its commits as mono rows
+  (`0d2c82c  Name the query in the empty state`) and its files as the source surface's rows — status
+  letter, truncated path, `+`/`−` counts — each expanding to the same CodeMirror merge diff the
+  Changes tab uses. Nothing here is a new component with a new look; a branch is a checkout, so it is
+  drawn with the vocabulary the checkout already earned. The commit sha and the counts are mono
+  because git measured them; the only prose is what the worker wrote.
+- **Landing is one accent hairline, because it is the panel's primary action.** The sidebar's New
+  thread is the screen's single filled control, so "Integrate into main" is an accent-coloured
+  hairline with its target in the label — the person reads what will move before they press it.
+  There is no confirmation dialog, because landing destroys nothing: the previous target commit is
+  always an ancestor of the new one, and the branch and its worktree stay. The refusal is where the
+  surface raises its voice: a conflict is a destructive hairline, a sentence, and the paths git named.
+- **Landed is a fact, not a status.** A landed row gains a success-coloured micro label with the
+  commit and, under the actions, one sentence naming the target, how it got there ("fast-forwarded"
+  or "with a merge commit"), and where the worktree was kept. It stays after a reload because it is
+  read from the captain's log.
+- **Steering has two modes and they look different.** While a worker runs, one composer and two
+  micro-labelled modes sit under it: `QUEUE` (accent hairline when pressed) and `INTERRUPT`. A queued
+  steer shows on the row as an accent micro label plus the text, truncated with the full message in
+  the title, so a person can see what they told a running worker without opening its transcript.
+  Interrupt asks once, because it ends a turn: the confirm names what happens to the partial work.
+- **A branch with nothing on it says so.** An empty branch is a sentence — "No commits on this branch
+  yet, so there is nothing to diff and nothing to land" — and a disabled landing control whose title
+  explains why. An empty diff that looks like zero work would be a lie about the worker.
+
 ## Components
 
 - **Controls** are hairline-outlined, 28px tall, 6px radius, no shadow. Hover lifts the background one

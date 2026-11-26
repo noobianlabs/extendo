@@ -20,13 +20,19 @@ export function providerInfos(env: NodeJS.ProcessEnv = process.env): ProviderInf
   ];
 }
 
+/** A demo turn normally streams quickly; a scripted run can slow it to steer a turn while it runs. */
+function demoDelay(env: NodeJS.ProcessEnv): { delay?: number } {
+  const value = Number(env.EXTENDO_DEMO_DELAY ?? '');
+  return Number.isFinite(value) && value > 0 ? { delay: value } : {};
+}
+
 export function providersPlugin(env: NodeJS.ProcessEnv = process.env): Plugin {
   return {
     name: 'providers',
     apply(ctx) {
       const registry = ctx.get<Registry<Provider>>('providers');
       const adapters = [
-        demoProvider(),
+        demoProvider(demoDelay(env)),
         ...(env.ANTHROPIC_API_KEY ? [anthropicProvider({ apiKey: env.ANTHROPIC_API_KEY })] : []),
         ...(env.OPENAI_API_KEY ? [openAIProvider({ apiKey: env.OPENAI_API_KEY, baseUrl: env.OPENAI_BASE_URL })] : []),
         ...(env.DEEPSEEK_API_KEY ? [deepSeekProvider({ apiKey: env.DEEPSEEK_API_KEY, baseUrl: env.DEEPSEEK_BASE_URL })] : []),
