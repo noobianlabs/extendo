@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import type { AgentStatus, ApprovalRequest, Message, RpcEvent, SessionEvent, SessionSnapshot } from '@extendo/contracts';
-import type { Thread } from '@extendo/contracts';
+import { noticeFor } from '@extendo/contracts';
+import type { AgentStatus, ApprovalRequest, Message, RpcEvent, SessionEvent, SessionSnapshot, Thread } from '@extendo/contracts';
 import { api, RpcSocket } from './api';
 
 type Assistant = Extract<Message, { role: 'assistant' }>;
@@ -65,6 +65,11 @@ function settle(state: SessionView, event: SessionEvent): SessionView {
     case 'turn/end':
       return { ...next, draft: undefined, approvals: next.approvals.filter((request) => request.turnId !== event.data.turnId),
         error: event.data.outcome === 'failed' ? event.data.error : next.error };
+    case 'crew/wake':
+    case 'crew/land': {
+      const notice = noticeFor(event);
+      return notice ? { ...next, messages: [...next.messages, notice] } : next;
+    }
     default: return next;
   }
 }

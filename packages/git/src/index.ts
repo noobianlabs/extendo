@@ -1,28 +1,22 @@
 import type {
-  CommitResult, CreateWorktreeResult, FileChange, GitCapabilities, GitHubCliState, PullRequestResult,
-  PushResult, WorktreeInfo, WorktreeRemoval, WorkspaceStatus,
+  BranchDiff, CommitResult, CreateWorktreeResult, FileChange, GitCapabilities, GitHubCliState, IntegrationResult,
+  PullRequestResult, PushResult, WorktreeInfo, WorktreeRemoval, WorkspaceStatus,
 } from '@extendo/contracts';
+import { compareBranches } from './compare.js';
 import { readChange } from './diff.js';
+import { GitError, firstLine, type GitErrorCode } from './errors.js';
 import { missingBinary, nodeExec, type Exec } from './exec.js';
+import { integrateBranch } from './integrate.js';
 import { readStatus } from './status.js';
 import { addWorktree, listWorktrees, removeWorktree, worktreePath } from './worktrees.js';
 
 export { nodeExec, type Exec, type CommandResult } from './exec.js';
+export { GitError, type GitErrorCode } from './errors.js';
+export { compareBranches } from './compare.js';
+export { integrateBranch, type IntegrateInput } from './integrate.js';
 export { secretReason } from './secrets.js';
 export { parseStatus, type ParsedStatus } from './status.js';
 export { parseWorktreeList, worktreePath } from './worktrees.js';
-
-export type GitErrorCode =
-  | 'no-git' | 'not-a-repo' | 'blocked' | 'unsafe' | 'nothing-staged' | 'no-remote' | 'detached'
-  | 'gh-missing' | 'gh-unauthenticated' | 'failed';
-
-/** A refusal a person can act on: what was stopped, and why. */
-export class GitError extends Error {
-  constructor(readonly code: GitErrorCode, message: string, readonly detail?: Record<string, unknown>) {
-    super(message);
-    this.name = 'GitError';
-  }
-}
 
 export interface GitServiceOptions {
   exec?: Exec;
@@ -113,6 +107,21 @@ export class GitService {
     const entry = status.files.find((file) => file.path === path);
     if (!entry) throw new GitError('unsafe', `${path} is not a changed file in this checkout`);
     return readChange(this.exec, root, path, staged);
+  }
+
+  /** A branch against the branch it was cut from: its commits and the merge diff they carry. */
+  async compare(cwd: string, input: { base: string; branch: string; from?: string }): Promise<BranchDiff> {
+    const { root } = await this.requireRepoRoot(cwd);
+    return compareBranches(this.exec, root, input);
+  }
+
+  /**
+   * Lands one branch on another without force. A conflict is refused before anything moves, so a
+   * refusal leaves the target at the commit it already had.
+   */
+  async integrate(cwd: string, input: { target: string; branch: string; message?: string }): Promise<IntegrationResult> {
+    const { root } = await this.requireRepoRoot(cwd);
+    return integrateBranch(this.exec, root, input);
   }
 
   async stage(cwd: string, paths: string[], allowSecrets = false): Promise<WorkspaceStatus> {
@@ -270,9 +279,10 @@ export class GitService {
     const stem = `extendo/${slug(input.title)}`;
     const branch = await this.allocateBranch(root, stem);
     const path = worktreePath(root, branch.replaceAll('/', '-'));
+    const forkPoint = await this.git(root, ['rev-parse', '--verify', `${base}^{commit}`]);
     const added = await addWorktree(this.exec, root, { path, branch, base });
     if (added.code !== 0) throw new GitError('failed', added.stderr || 'git could not create the worktree');
-    return { path, branch, base };
+    return { path, branch, base, ...(forkPoint.code === 0 ? { baseCommit: forkPoint.stdout.trim() } : {}) };
   }
 
   private async allocateBranch(root: string, stem: string): Promise<string> {
@@ -320,10 +330,6 @@ export class GitService {
     const result = await this.git(root, ['branch', ...(force ? ['-D'] : ['-d']), '--', branch]);
     if (result.code !== 0) throw new GitError('unsafe', lastLines(result.stderr, 3) || `git could not delete ${branch}`);
   }
-}
-
-function firstLine(value: string): string {
-  return value.split('\n').map((line) => line.trim()).find(Boolean) ?? '';
 }
 
 /** The part of git's output that says what happened, without the trailing advice. */

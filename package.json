@@ -13,7 +13,8 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "e2e": "node scripts/e2e/self-extension.mjs",
-    "e2e:crew": "node scripts/e2e/crew.mjs"
+    "e2e:crew": "node scripts/e2e/crew.mjs",
+    "e2e:landing": "node scripts/e2e/crew-integration.mjs"
   },
   "devDependencies": {
     "@types/node": "24.19.2",

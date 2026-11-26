@@ -70,7 +70,7 @@ describe('the demo checkout', () => {
     });
     expect(view.status.headSubject).toBe('Extract the empty-state copy');
     expect(view.status.remote).toMatchObject({ name: 'origin', url: join(app.dataDir, 'demo', 'northstar.git') });
-    expect(view.worktrees.length).toBe(6);
+    expect(view.worktrees.length).toBe(8);
     expect(view.worktrees.find((entry) => entry.current)?.path).toBe(thread.worktree);
     expect(view.worktrees.some((entry) => entry.path.endsWith('crew-empty-state-copy'))).toBe(true);
     expect(view.worktrees.some((entry) => entry.path.endsWith('crew-changelog'))).toBe(true);

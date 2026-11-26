@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import type { ModelChunk, ModelRequest, Provider, Registry, Tool } from '@extendo/contracts';
 import { PluginLoader } from '@extendo/kernel';
 import { sessionPlugin, type SessionStore } from '@extendo/session';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { agentPlugin, capabilitiesPlugin, type AgentRuntime, type SystemSection } from './index.js';
 
@@ -48,6 +48,37 @@ afterEach(async () => {
   loader.dispose();
   rmSync(directory, { recursive: true, force: true });
 });
+
+interface Gate<T> { promise: Promise<T>; release(value: T): void }
+
+function gate<T = void>(): Gate<T> {
+  let release!: (value: T) => void;
+  const promise = new Promise<T>((resolve) => { release = resolve; });
+  return { promise, release };
+}
+
+/** A provider whose stream blocks on a gate, so a test can steer a turn that is genuinely running. */
+async function holdableProvider(name: string, first: (request: ModelRequest) => AsyncGenerator<ModelChunk>, rest: () => ModelChunk[]) {
+  await loader.mount({ name, apply(ctx) {
+    let requests = 0;
+    ctx.get<Registry<Provider>>('providers').register(ctx, name, {
+      id: name,
+      async *stream(request) {
+        seen.push(request);
+        requests += 1;
+        if (requests === 1) { yield* first(request); return; }
+        yield* rest();
+      },
+    });
+  } });
+}
+
+function aborted(signal: AbortSignal): Promise<never> {
+  return new Promise((_, reject) => {
+    if (signal.aborted) return reject(new Error('Turn cancelled'));
+    signal.addEventListener('abort', () => reject(new Error('Turn cancelled')), { once: true });
+  });
+}
 
 describe('agent loop', () => {
   it('assembles prompt and tools, then runs a multi-step turn in durable order', async () => {
@@ -136,5 +167,85 @@ describe('agent loop', () => {
     expect(await agent.start(sessionId, 'Skip', options).done).toMatchObject({ outcome: 'completed', final: '' });
     expect(seen).toHaveLength(0);
     expect(store.replay(sessionId).map(({ type }) => type)).toEqual(['session/created', 'turn/start', 'turn/end']);
+  });
+});
+
+describe('steering a running turn', () => {
+  it('delivers a queued steer exactly once, at the next step boundary', async () => {
+    const started = gate();
+    const finished = gate();
+    await holdableProvider('held', async function* () {
+      // Wait until the test has steered before the first step is admitted, then ask for a tool.
+      await started.promise;
+      yield text('Reading the empty state.');
+      yield call;
+      yield done;
+    }, () => [text('Acted on the note at the boundary.'), done]);
+    const ctx = loader.ctx;
+    let running = false;
+    ctx.get<Registry<Tool>>('tools').register(ctx, 'sample', {
+      name: 'sample', description: 'Read a note', input: z.object({ path: z.string() }), readOnly: true,
+      async execute(input) { running = true; await finished.promise; return input; },
+    });
+    const turn = agent.start(sessionId, 'Rework the empty state', { provider: 'held', model: 'test' });
+    started.release();
+    await vi.waitFor(() => expect(running).toBe(true));
+    expect(agent.steer(sessionId, 'Keep the clear-filters action')).toBe(true);
+    expect(agent.steer(sessionId, 'Keep the clear-filters action')).toBe(true);
+    // Two identical steers are two inputs, so the boundary appends two messages, each of them once.
+    finished.release();
+    expect(await turn.done).toMatchObject({ outcome: 'completed' });
+    const events = store.replay(sessionId);
+    const steered = events.filter((event) => event.type === 'user/message' && event.data.content === 'Keep the clear-filters action');
+    expect(steered).toHaveLength(2);
+    const secondStep = events.findIndex((event) => event.type === 'step/start' && event.seq > steered[0]!.seq);
+    expect(secondStep).toBeGreaterThan(-1);
+    expect(steered.every((event) => event.seq < events[secondStep]!.seq)).toBe(true);
+    expect(seen[1]?.messages.at(-1)).toMatchObject({ role: 'user', content: 'Keep the clear-filters action' });
+  });
+
+  it('ends an interrupted turn with a cancelled outcome and starts the new one from the message', async () => {
+    await holdableProvider('held', async function* (request) {
+      yield text('Reading the component before the change.');
+      await aborted(request.signal);
+    }, () => [text('Rewrote the copy the captain asked for.'), done]);
+    const first = agent.start(sessionId, 'Rework the empty state', { provider: 'held', model: 'test' });
+    await vi.waitFor(() => expect(store.replay(sessionId).some((event) => event.type === 'step/start')).toBe(true));
+    const second = await agent.interrupt(sessionId, 'Stop and keep the original wording', { provider: 'held', model: 'test' });
+    expect(await first.done).toMatchObject({ outcome: 'cancelled' });
+    expect(await second.done).toMatchObject({ outcome: 'completed' });
+    const events = store.replay(sessionId);
+    const turns = events.filter((event) => event.type === 'turn/start').map((event) => event.data.turnId);
+    expect(turns).toHaveLength(2);
+    expect(events.filter((event) => event.type === 'turn/end').map((event) => event.data.outcome)).toEqual(['cancelled', 'completed']);
+    const brief = events.filter((event) => event.type === 'user/message' && event.data.content === 'Stop and keep the original wording');
+    expect(brief).toHaveLength(1);
+    expect(brief[0]!.seq).toBeGreaterThan(events.find((event) => event.type === 'turn/end')!.seq);
+    // The interrupted step's text is retained for diagnostics, not promoted to a completed answer.
+    const attempt = events.find((event) => event.type === 'assistant/attempt');
+    expect(attempt).toMatchObject({ data: { content: 'Reading the component before the change.' } });
+    const firstTurnMessages = store.snapshot(sessionId).messages.filter((message) => message.role === 'assistant' && message.turnId === turns[0]);
+    expect(firstTurnMessages).toHaveLength(0);
+    expect(agent.status(sessionId)).toBe('idle');
+  });
+
+  it('interrupts a turn that is blocked on an approval, then answers the new turn', async () => {
+    await holdableProvider('blocked', async function* () {
+      yield call;
+      yield done;
+    }, () => [text('Left the notes alone.'), done]);
+    const ctx = loader.ctx;
+    ctx.get<Registry<Tool>>('tools').register(ctx, 'sample', {
+      name: 'sample', description: 'Write a note', input: z.unknown(), needsApproval: true,
+      async execute() { return { written: true }; },
+    });
+    const selection = { provider: 'blocked', model: 'test', interactive: true };
+    const first = agent.start(sessionId, 'Change the notes', selection);
+    await vi.waitFor(() => expect(agent.status(sessionId)).toBe('waiting'));
+    const second = await agent.interrupt(sessionId, 'Do not change the notes', selection);
+    expect(await first.done).toMatchObject({ outcome: 'cancelled' });
+    expect(await second.done).toMatchObject({ outcome: 'completed', final: 'Left the notes alone.' });
+    expect(agent.approvals(sessionId)).toEqual([]);
+    expect(store.replay(sessionId).filter((event) => event.type === 'turn/end').map((event) => event.data.outcome)).toEqual(['cancelled', 'completed']);
   });
 });

@@ -278,7 +278,7 @@ export function App() {
       rail={<Inspector key={thread?.id} thread={thread} project={project} status={status} messages={messages} now={now}
         tab={panelTab} onTabChange={setPanelTab} onClose={toggleInspector}
         onSteer={steerSubagent} onStop={stopSubagent} onApproval={answerFor}
-        revision={view.revision} onThread={onThread} onDeleted={forgetThread} />}>
+        revision={view.revision} onThread={onThread} onDeleted={forgetThread} onOpenThread={selectThread} />}>
       <div className="extendo-main" data-workshop={workshop.open ? 'open' : undefined}
         style={workshop.open ? { paddingInlineEnd: 'var(--workshop-inset)' } : undefined}>
         {notice && <div className="extendo-notice" role="alert"><CircleAlert size={14} aria-hidden="true" />{notice}<button type="button" onClick={() => setNotice(undefined)}>Dismiss</button></div>}

@@ -1,4 +1,4 @@
-import type { PullRequest, SessionEvent, Subagent, SubagentActivity, ThreadState } from './index.js';
+import type { NoticeMessage, PullRequest, SessionEvent, SteerPin, Subagent, SubagentActivity, ThreadState } from './index.js';
 
 /**
  * Folds the durable subagent events into the live swarm a thread shows. The events are the only
@@ -107,6 +107,35 @@ export function openTurn(events: readonly SessionEvent[]): string | undefined {
     else if (event.type === 'turn/end' && event.data.turnId === open) open = undefined;
   }
   return open;
+}
+
+/**
+ * The durable crew notice one session event projects into a transcript. Both the stored projection
+ * and the browser's live fold call this, so a wake or a landing looks the same whether it arrived
+ * before the page loaded or while it was open.
+ */
+export function noticeFor(event: SessionEvent): NoticeMessage | undefined {
+  if (event.type === 'crew/wake') {
+    const { workerId, title, outcome, report } = event.data;
+    return { role: 'notice', id: `wake-${event.seq}`, kind: 'crew-wake', workerId, title, outcome, content: report, at: event.ts };
+  }
+  if (event.type === 'crew/land') {
+    const { workerId, branch, target, commit, shortCommit, mode } = event.data;
+    return {
+      role: 'notice', id: `land-${event.seq}`, kind: 'crew-land', workerId,
+      title: `Landed ${branch}`, target, commit, mode, at: event.ts,
+      content: `Into ${target} as ${shortCommit}, ${mode === 'fast-forward' ? 'fast-forwarded' : 'merged with a merge commit'}.`,
+    };
+  }
+  return undefined;
+}
+
+/** The newest steer a worker's log carries inside the turn that is still open. */
+export function steerInOpenTurn(events: readonly SessionEvent[]): SteerPin | undefined {
+  const turnId = openTurn(events);
+  if (!turnId) return undefined;
+  const last = events.filter((event) => event.type === 'crew/steer' && event.data.turnId === turnId).at(-1);
+  return last && last.type === 'crew/steer' ? { mode: last.data.mode, text: last.data.text, at: last.ts } : undefined;
 }
 
 /**

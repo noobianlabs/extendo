@@ -124,6 +124,13 @@ const verifyScript: Script = {
   ],
 };
 
+const changelogScript: Script = {
+  steps: [
+    { text: 'Reading the changelog before adding to it.', call: { name: 'demo_read', input: { path: 'docs/CHANGELOG.md' } } },
+    { text: 'The changelog already carries the empty-state note, so there is nothing to add and the branch stays as it is.' },
+  ],
+};
+
 const summaryScript: Script = {
   steps: [
     { text: 'Reading the search components.', call: { name: 'demo_read', input: { path: demoPath } } },
@@ -215,6 +222,7 @@ function pluginScript(tools: readonly ModelTool[], messages: ModelRequest['messa
 export function scriptFor(prompt: string): Script {
   const text = prompt.toLowerCase();
   if (/swarm|delegate|parallel|fan out|three tracks/.test(text)) return swarmScript;
+  if (/changelog|release note/.test(text)) return changelogScript;
   if (/audit|review the components|dead code/.test(text)) return auditScript;
   if (/verify|verification|check the change|regression/.test(text)) return verifyScript;
   if (/patch|fix|edit|rewrite|empty state/.test(text)) return patchScript;

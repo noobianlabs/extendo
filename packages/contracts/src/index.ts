@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { GitCapabilities, GitRemote, WorkspaceStatus, WorktreeInfo } from './git.js';
+import type { GitCapabilities, GitRemote, IntegrationMode, WorkspaceStatus, WorktreeInfo } from './git.js';
 
 export type Disposable = () => void;
 export type Listener<T> = (payload: T) => void | Promise<void>;
@@ -229,6 +229,10 @@ export interface SessionEventData {
   'subagent/approval': { subagentId: string; request: ApprovalRequest };
   'subagent/approval-answered': { subagentId: string; requestId: string; decision: ApprovalDecision };
   'crew/wake': { workerId: string; workerSessionId: string; title: string; turnId: string; outcome: TurnOutcome; report: string };
+  /** A captain steered a running worker: `queue` lands at its next step, `interrupt` ends the turn first. */
+  'crew/steer': { workerId: string; mode: SteerMode; text: string; turnId?: string };
+  /** A captain landed a worker's branch on the branch the crew was cut from. */
+  'crew/land': { workerId: string; branch: string; target: string; commit: string; shortCommit: string; mode: IntegrationMode };
 }
 
 export type SessionEventType = keyof SessionEventData;
@@ -325,6 +329,9 @@ export interface CrewMember {
   status: AgentStatus;
   state?: ThreadState;
   branch?: string;
+  /** The branch the worker's own branch was cut from: what its diff is measured against, and where it lands. */
+  base?: string;
+  baseCommit?: string;
   worktree?: string;
   /** The worker's last report: the newest assistant message in its own log. */
   report?: string;
@@ -332,6 +339,28 @@ export interface CrewMember {
   pullRequest?: PullRequest;
   issueId?: string;
   archived?: boolean;
+  /** Set once the captain landed this branch, with the commit the target carries. */
+  landed?: Landed;
+  /** The newest steering input delivered to this worker while its turn was running. */
+  steer?: SteerPin;
+}
+
+/** The durable record of one integration: the captain's log keeps it, so a reload still shows it. */
+export interface Landed {
+  target: string;
+  commit: string;
+  shortCommit: string;
+  mode: IntegrationMode;
+  at: string;
+}
+
+/** How a captain steers a running worker: at its next step boundary, or by ending the turn first. */
+export type SteerMode = 'queue' | 'interrupt';
+
+export interface SteerPin {
+  mode: SteerMode;
+  text: string;
+  at: string;
 }
 
 export interface Thread {
@@ -347,6 +376,10 @@ export interface Thread {
   status: AgentStatus;
   createdAt: string;
   branch?: string;
+  /** The branch this thread's own branch was cut from, when it runs in a worktree of its own. */
+  base?: string;
+  /** The commit that branch pointed at when this thread's branch was cut, so a review survives a landing. */
+  baseCommit?: string;
   repo?: string;
   role?: ThreadRole;
   /** The captain a worker reports to. */
@@ -383,7 +416,11 @@ export type Message =
   | { role: 'user'; id: string; turnId: string; content: string }
   | { role: 'assistant'; id: string; turnId: string; stepId: string; content: string; reasoning?: string; tools: { call: ToolCall; result?: ToolResult }[] }
   /** A durable crew notice: a worker finished and its captain's log now carries the report. */
-  | { role: 'notice'; id: string; kind: 'crew-wake'; workerId: string; title: string; outcome: TurnOutcome; content: string; at: string };
+  | { role: 'notice'; id: string; kind: 'crew-wake'; workerId: string; title: string; outcome: TurnOutcome; content: string; at: string }
+  /** A durable crew notice: the captain landed a worker's branch on the crew's integration branch. */
+  | { role: 'notice'; id: string; kind: 'crew-land'; workerId: string; title: string; content: string; target: string; commit: string; mode: IntegrationMode; at: string };
+
+export type NoticeMessage = Extract<Message, { role: 'notice' }>;
 
 export interface SessionSnapshot {
   session: Session;

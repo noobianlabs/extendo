@@ -14,6 +14,8 @@ function row(record: unknown): ThreadRow | undefined {
   return {
     ...stored,
     branch: stored.branch ?? undefined,
+    base: stored.base ?? undefined,
+    baseCommit: stored.baseCommit ?? undefined,
     worktree: stored.worktree ?? undefined,
     role: stored.role ?? 'standalone',
     captainId: stored.captainId ?? undefined,
@@ -40,6 +42,10 @@ export interface CreateThreadInput {
   provider: string;
   model: string;
   branch?: string;
+  /** The branch this thread's branch was cut from, when it owns a worktree of its own. */
+  base?: string;
+  /** The commit that branch pointed at when this thread's branch was cut. */
+  baseCommit?: string;
   role?: ThreadRole;
   captainId?: string;
 }
@@ -90,6 +96,8 @@ export class WorkspaceState {
       ['archived', 'INTEGER NOT NULL DEFAULT 0'],
       ['report', 'TEXT'],
       ['reportAt', 'TEXT'],
+      ['base', 'TEXT'],
+      ['baseCommit', 'TEXT'],
     ] as const) {
       if (!names.has(name)) this.db.exec(`ALTER TABLE threads ADD COLUMN ${name} ${definition}`);
     }
@@ -146,18 +154,19 @@ export class WorkspaceState {
       archived: false,
     };
     this.db.prepare(
-      'INSERT INTO threads (id, projectId, sessionId, title, cwd, provider, model, createdAt, branch, role, captainId, archived) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO threads (id, projectId, sessionId, title, cwd, provider, model, createdAt, branch, role, captainId, archived, base, baseCommit) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
     ).run(
       thread.id, thread.projectId, thread.sessionId, thread.title, thread.cwd, thread.provider, thread.model,
       thread.createdAt, thread.branch ?? null, thread.role ?? 'standalone', thread.captainId ?? null, 0,
+      thread.base ?? null, thread.baseCommit ?? null,
     );
     return thread;
   }
 
   /** Moves a thread to another checkout: its own worktree, or back to the shared checkout. */
-  setThreadCheckout(sessionId: string, checkout: { cwd: string; branch?: string; worktree?: string }): void {
-    this.db.prepare('UPDATE threads SET cwd = ?, branch = ?, worktree = ? WHERE sessionId = ?')
-      .run(checkout.cwd, checkout.branch ?? null, checkout.worktree ?? null, sessionId);
+  setThreadCheckout(sessionId: string, checkout: { cwd: string; branch?: string; worktree?: string; base?: string; baseCommit?: string }): void {
+    this.db.prepare('UPDATE threads SET cwd = ?, branch = ?, worktree = ?, base = COALESCE(?, base), baseCommit = COALESCE(?, baseCommit) WHERE sessionId = ?')
+      .run(checkout.cwd, checkout.branch ?? null, checkout.worktree ?? null, checkout.base ?? null, checkout.baseCommit ?? null, sessionId);
   }
 
   setThreadReport(sessionId: string, report: string | undefined, at: string): void {

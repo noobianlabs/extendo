@@ -801,6 +801,417 @@
 .stateMark[data-state="working"] { color: var(--text); }
 .stateMark[data-state="queued"] { color: var(--muted-2); }
 
+/* The worker's branch, its review, its landing and the steering input. */
+.crewTitle {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  min-block-size: var(--control-height);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: var(--type-body);
+  font-weight: 500;
+  letter-spacing: var(--track-body);
+  text-align: start;
+  cursor: pointer;
+}
+
+.crewTitle > bdi,
+.crewTitleText {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.crewTitleText {
+  flex: 1;
+  font: var(--type-body);
+  font-weight: 500;
+  letter-spacing: var(--track-body);
+}
+
+.crewLandedMark {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--success);
+  font: var(--type-micro);
+  letter-spacing: var(--track-micro);
+  text-transform: uppercase;
+}
+
+.crewSteer {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+  margin: 0;
+  padding-inline-start: var(--space-5);
+  color: var(--muted-1);
+  font: var(--type-caption);
+  letter-spacing: var(--track-caption);
+}
+
+.crewSteerMode {
+  flex: none;
+  color: var(--accent);
+  font: var(--type-micro);
+  letter-spacing: var(--track-micro);
+  text-transform: uppercase;
+}
+
+.crewSteerText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.crewActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding-inline-start: var(--space-5);
+}
+
+.crewAction,
+.crewPrimary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-block-size: var(--control-height);
+  padding: 0 var(--space-3);
+  border-radius: var(--radius);
+  font: var(--type-caption);
+  font-weight: 560;
+  letter-spacing: var(--track-caption);
+  cursor: pointer;
+}
+
+.crewAction {
+  border: var(--hairline) solid var(--border-3);
+  background: transparent;
+  color: var(--text);
+}
+
+.crewAction:hover:not(:disabled) { background: var(--secondary); }
+
+.crewPrimary {
+  border: var(--hairline) solid var(--accent-line);
+  background: transparent;
+  color: var(--accent);
+}
+
+.crewPrimary:hover:not(:disabled) { background: var(--accent-soft); }
+
+.crewAction:disabled,
+.crewPrimary:disabled {
+  border-color: var(--border-1);
+  color: var(--muted-3);
+  cursor: default;
+}
+
+.crewDiff {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-inline-start: var(--space-5);
+  min-width: 0;
+}
+
+.crewDiffHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.crewDiffCount {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted-2);
+  font: var(--type-micro);
+  letter-spacing: var(--track-micro);
+  text-transform: uppercase;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.crewRefresh {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  margin-inline-start: auto;
+  inline-size: var(--control-height);
+  block-size: var(--control-height);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted-2);
+  cursor: pointer;
+}
+
+.crewRefresh:hover { background: var(--secondary); color: var(--text); }
+
+.crewCommits {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.crewCommits > li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  color: var(--muted-2);
+}
+
+.crewSha { flex: none; color: var(--muted-1); font: var(--type-mono); }
+
+.crewSubject {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted-1);
+  font: var(--type-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.crewFiles {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.crewFile {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  inline-size: 100%;
+  min-block-size: var(--control-height);
+  padding: 0 var(--space-1);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font: var(--type-body);
+  text-align: start;
+  cursor: pointer;
+}
+
+.crewFile:hover { background: var(--secondary); }
+.crewFile:focus-visible { outline: 1px solid var(--ring); outline-offset: -1px; }
+
+.crewLetter {
+  flex: none;
+  inline-size: 12px;
+  color: var(--muted-2);
+  font: var(--type-mono);
+}
+
+.crewLetter[data-status="added"],
+.crewLetter[data-status="untracked"] { color: var(--success); }
+.crewLetter[data-status="deleted"],
+.crewLetter[data-status="conflict"] { color: var(--destructive); }
+
+.crewPath {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font: var(--type-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.crewPathParent { color: var(--muted-3); }
+
+.crewCounts {
+  display: flex;
+  flex: none;
+  gap: var(--space-1);
+  font: var(--type-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.crewCounts[data-empty] { color: var(--muted-3); text-transform: uppercase; font: var(--type-micro); letter-spacing: var(--track-micro); }
+.crewAdd { color: var(--success); }
+.crewDelete { color: var(--destructive); }
+
+.chevron {
+  flex: none;
+  color: var(--muted-3);
+  transition: transform var(--dur-1) var(--ease-out);
+}
+
+.crewFile[aria-expanded="true"] .chevron { transform: rotate(90deg); }
+
+.crewDiffBody {
+  margin: var(--space-1) 0 var(--space-2);
+  border: var(--hairline) solid var(--border-1);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.crewEmptyNote,
+.crewNote {
+  margin: 0;
+  color: var(--muted-2);
+  font: var(--type-caption);
+  letter-spacing: var(--track-caption);
+  text-wrap: pretty;
+}
+
+.crewLanded {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding-inline-start: var(--space-5);
+  color: var(--muted-1);
+  font: var(--type-caption);
+  letter-spacing: var(--track-caption);
+}
+
+.crewLanded > span:first-of-type {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.crewLanded code { color: var(--text); font: var(--type-mono); overflow-wrap: anywhere; }
+.crewLanded bdi { color: var(--text); font: var(--type-mono); overflow-wrap: anywhere; }
+.crewKept { color: var(--muted-3); }
+
+.crewProblem {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: var(--hairline) solid color-mix(in srgb, var(--destructive) 45%, transparent);
+  border-radius: var(--radius);
+  color: var(--text);
+  font: var(--type-caption);
+  letter-spacing: var(--track-caption);
+  text-wrap: pretty;
+}
+
+.crewProblem > svg { flex: none; margin-block-start: 2px; color: var(--destructive); }
+.crewProblem > div { min-width: 0; }
+.crewProblem p { margin: 0; overflow-wrap: anywhere; }
+
+.crewConflicts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin: var(--space-1) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.crewConflicts code {
+  color: var(--destructive);
+  font: var(--type-mono);
+  overflow-wrap: anywhere;
+}
+
+.crewComposer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.crewComposerRow {
+  display: flex;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.crewInput {
+  flex: 1;
+  min-width: 0;
+  min-block-size: var(--control-height);
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--inset);
+  box-shadow: var(--sh-inset);
+  color: var(--text);
+  font: var(--type-body);
+  letter-spacing: var(--track-body);
+}
+
+.crewInput::placeholder { color: var(--muted-2); }
+.crewInput:disabled { color: var(--muted-3); }
+
+.crewSend {
+  flex: none;
+  min-block-size: var(--control-height);
+  padding: 0 var(--space-3);
+  border: var(--hairline) solid var(--border-3);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text);
+  font: var(--type-caption);
+  font-weight: 560;
+  letter-spacing: var(--track-caption);
+  cursor: pointer;
+}
+
+.crewSend:hover:not(:disabled) { background: var(--secondary); }
+
+.crewSend:disabled {
+  border-color: var(--border-1);
+  color: var(--muted-3);
+  cursor: default;
+}
+
+.crewModes {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.crewMode {
+  min-block-size: var(--control-height);
+  padding: 0 var(--space-2);
+  border: var(--hairline) solid transparent;
+  border-radius: var(--radius-sm);
+  background: var(--secondary);
+  color: var(--muted-2);
+  font: var(--type-micro);
+  letter-spacing: var(--track-micro);
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.crewMode[aria-pressed="true"] {
+  border-color: var(--accent-line);
+  color: var(--accent);
+}
+
+.crewMode:focus-visible { outline: 1px solid var(--ring); outline-offset: 1px; }
+
+.srOnly {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 @media (hover: hover) and (pointer: fine) {
   .crewLink:hover { text-decoration: underline; text-decoration-color: var(--border-3); text-underline-offset: 2px; }
+  .crewTitle:hover > bdi { text-decoration: underline; text-decoration-color: var(--border-3); text-underline-offset: 2px; }
 }

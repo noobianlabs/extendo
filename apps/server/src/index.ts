@@ -3,6 +3,7 @@ import { createServer, type Server } from 'node:http';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getRequestListener } from '@hono/node-server';
+import { createCrewApp } from './crewApi.js';
 import { createExtensionApp } from './extensionApi.js';
 import { createSourceApp } from './gitApi.js';
 import { createHttpApp, type HttpOptions } from './http.js';
@@ -42,10 +43,12 @@ export async function startServer(options: ServerOptions = {}): Promise<ExtendoS
   const app = createHttpApp(runtime, { ...options, webRoot, origin: policy });
   const plugins = createExtensionApp(runtime.extensions, { origin: policy });
   const source = createSourceApp(runtime, { origin: policy, git: runtime.git });
+  const crew = createCrewApp(runtime, { origin: policy });
   const server = createServer(getRequestListener((request) => {
     const { pathname } = new URL(request.url);
     if (pathname === '/api/extensions' || pathname.startsWith('/api/extensions/')) return plugins.fetch(request);
     if (pathname === '/api/git' || pathname.startsWith('/api/git/')) return source.fetch(request);
+    if (pathname === '/api/crew' || pathname.startsWith('/api/crew/')) return crew.fetch(request);
     if (request.method === 'DELETE' && /^\/api\/threads\/[^/]+$/.test(pathname)) return source.fetch(request);
     return app.fetch(request);
   }));

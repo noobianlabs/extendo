@@ -118,4 +118,45 @@ export interface CreateWorktreeResult {
   path: string;
   branch: string;
   base?: string;
+  /** The commit the base branch pointed at when the worktree was cut. */
+  baseCommit?: string;
+}
+
+export type IntegrationMode = 'fast-forward' | 'merge';
+
+/** What landing one branch on another did: the commit the target now carries and how it got there. */
+export interface IntegrationResult {
+  target: string;
+  branch: string;
+  /** The commit the target's branch points at now. */
+  commit: string;
+  shortCommit: string;
+  mode: IntegrationMode;
+  /** What the target pointed at before, so a caller can prove it moved. */
+  previous: string;
+  subject: string;
+}
+
+export interface BranchCommit {
+  sha: string;
+  shortSha: string;
+  subject: string;
+  author: string;
+  at: string;
+}
+
+/**
+ * A branch measured against the branch it was cut from: the commits it carries, and the merge diff
+ * a person would land. `mergeBase` is what both branches share, so the file pairs are the real merge
+ * result rather than everything the base did since.
+ */
+export interface BranchDiff {
+  base: string;
+  branch: string;
+  /** The commit this diff runs from: the fork point when it is known, else the branches' merge base. */
+  mergeBase: string;
+  commits: BranchCommit[];
+  files: FileChange[];
+  /** The branch has no commit the base does not already carry. */
+  empty: boolean;
 }

@@ -33,6 +33,7 @@ interface Started {
 function fakeAgent(status: AgentStatus | ((sessionId: string) => AgentStatus) = 'idle') {
   const started: Started[] = [];
   const steered: { sessionId: string; input: string }[] = [];
+  const interrupted: { sessionId: string; input: string }[] = [];
   const cancelled: string[] = [];
   const agent = {
     start(sessionId: string, input: string, options: SendOptions): TurnHandle {
@@ -48,8 +49,12 @@ function fakeAgent(status: AgentStatus | ((sessionId: string) => AgentStatus) = 
       steered.push({ sessionId, input });
       return true;
     },
+    async interrupt(sessionId: string, input: string) {
+      interrupted.push({ sessionId, input });
+      return { turnId: `turn-interrupt-${interrupted.length}`, done: new Promise(() => {}) };
+    },
   };
-  return { agent: agent as unknown as AgentRuntime, started, steered, cancelled };
+  return { agent: agent as unknown as AgentRuntime, started, steered, interrupted, cancelled };
 }
 
 const git = {
@@ -288,14 +293,46 @@ describe('CrewService', () => {
     const captain = row(bench, bench.captain.id);
 
     statuses.set(copy.sessionId, 'working');
-    expect(await crew.message(captain, copy.id, 'Keep the clear-filters button.')).toEqual({ threadId: copy.id, delivered: 'steer' });
+    expect(await crew.message(captain, copy.id, 'Keep the clear-filters button.')).toMatchObject({ threadId: copy.id, delivered: 'queue' });
     expect(agent.steered).toEqual([{ sessionId: copy.sessionId, input: 'Keep the clear-filters button.' }]);
     expect(agent.started).toHaveLength(0);
+    // The mode is a durable fact in the worker's own log, not a hint the UI invents.
+    expect(bench.sessions.replay(copy.sessionId).filter((event) => event.type === 'crew/steer'))
+      .toMatchObject([{ data: { workerId: copy.id, mode: 'queue', text: 'Keep the clear-filters button.' } }]);
 
     statuses.set(copy.sessionId, 'idle');
-    expect(await crew.message(captain, copy.id, 'Now add the changelog note.')).toEqual({ threadId: copy.id, delivered: 'turn' });
+    expect(await crew.message(captain, copy.id, 'Now add the changelog note.')).toMatchObject({ threadId: copy.id, delivered: 'turn' });
     expect(agent.started).toHaveLength(1);
     expect(agent.started[0]?.sessionId).toBe(copy.sessionId);
+    await crew.close();
+  });
+
+  it('interrupts a running worker and records that mode in the worker log', async () => {
+    const bench = makeBench();
+    const statuses = new Map<string, AgentStatus>();
+    const agent = fakeAgent((sessionId) => statuses.get(sessionId) ?? 'idle');
+    const crew = new CrewService({ ctx: bench.ctx, workspace: bench.workspace, sessions: bench.sessions, agent: agent.agent, git });
+    await crew.whenReady();
+    const copy = worker(bench, 'Rework the copy');
+    statuses.set(copy.sessionId, 'working');
+
+    expect(await crew.message(row(bench, bench.captain.id), copy.id, 'Stop and keep the original wording.', 'interrupt'))
+      .toMatchObject({ threadId: copy.id, delivered: 'interrupt' });
+    expect(agent.interrupted).toEqual([{ sessionId: copy.sessionId, input: 'Stop and keep the original wording.' }]);
+    expect(agent.steered).toEqual([]);
+    expect(bench.sessions.replay(copy.sessionId).filter((event) => event.type === 'crew/steer'))
+      .toMatchObject([{ data: { workerId: copy.id, mode: 'interrupt', text: 'Stop and keep the original wording.' } }]);
+    await crew.close();
+  });
+
+  it('does not record a steer when the worker was idle and the message started a turn', async () => {
+    const bench = makeBench();
+    const { crew, started } = crewOf(bench);
+    await crew.whenReady();
+    const copy = worker(bench, 'Rework the copy');
+    expect(await crew.message(row(bench, bench.captain.id), copy.id, 'Add the changelog note.')).toMatchObject({ delivered: 'turn' });
+    expect(started).toHaveLength(1);
+    expect(bench.sessions.replay(copy.sessionId).some((event) => event.type === 'crew/steer')).toBe(false);
     await crew.close();
   });
 
