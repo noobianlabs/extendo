@@ -1,4 +1,4 @@
-import { lazy, Suspense, useId, useMemo, useState } from 'react';
+import { lazy, Suspense, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent, ReactNode } from 'react';
 import {
   ChevronRight, Circle, CircleCheck, CircleDot, CircleX, FileCode2, FilePenLine,
@@ -275,6 +275,39 @@ export function Inspector({
     setTab(next);
     onTabChange?.(next);
   };
+  const strip = useRef<HTMLDivElement>(null);
+  const [overflow, setOverflow] = useState<'' | 'start' | 'end' | 'both'>('');
+  useLayoutEffect(() => {
+    const node = strip.current;
+    if (!node) return;
+    const sync = () => {
+      const room = node.scrollWidth - node.clientWidth;
+      if (room <= 1) return setOverflow('');
+      const start = node.scrollLeft > 1;
+      const end = node.scrollLeft < room - 1;
+      setOverflow(start && end ? 'both' : end ? 'end' : start ? 'start' : '');
+    };
+    sync();
+    const observer = new ResizeObserver(sync);
+    observer.observe(node);
+    node.addEventListener('scroll', sync, { passive: true });
+    return () => {
+      observer.disconnect();
+      node.removeEventListener('scroll', sync);
+    };
+  }, []);
+  useLayoutEffect(() => {
+    const node = strip.current;
+    const selected = node?.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (!node || !selected) return;
+    const style = getComputedStyle(node);
+    const box = node.getBoundingClientRect();
+    const tab = selected.getBoundingClientRect();
+    const start = box.left + parseFloat(style.paddingLeft);
+    const end = box.right - parseFloat(style.paddingRight);
+    if (tab.right > end) node.scrollLeft += tab.right - end;
+    else if (tab.left < start) node.scrollLeft -= start - tab.left;
+  }, [active]);
   const [opened, setOpened] = useState<{ threadId?: string; path: string }>();
   const baseId = useId();
   const data = useMemo(() => {
@@ -321,7 +354,7 @@ export function Inspector({
         <X size={15} />
       </button>
     </div>
-    <div className={styles.tabs} role="tablist" aria-label="Inspector views">
+    <div className={styles.tabs} ref={strip} role="tablist" aria-label="Inspector views" data-overflow={overflow || undefined}>
       {visibleTabs.map((name, index) => <button
         key={name} type="button" role="tab" id={`${baseId}-${name}-tab`}
         aria-selected={active === name} aria-controls={`${baseId}-${name}`} tabIndex={active === name ? 0 : -1}

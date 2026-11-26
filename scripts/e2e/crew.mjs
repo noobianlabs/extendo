@@ -35,6 +35,50 @@ async function openCaptain(page, url) {
   return panel;
 }
 
+async function strip(page, label) {
+  const read = () => page.evaluate(() => {
+    const tabs = document.querySelector('[aria-label="Inspector views"]');
+    const style = getComputedStyle(tabs);
+    const box = tabs.getBoundingClientRect();
+    const start = box.left + parseFloat(style.paddingLeft);
+    const end = box.right - parseFloat(style.paddingRight);
+    return {
+      scrollable: tabs.scrollWidth > tabs.clientWidth + 1,
+      fade: tabs.dataset.overflow ?? null,
+      scrollLeft: Math.round(tabs.scrollLeft),
+      tabs: [...tabs.querySelectorAll('button')].map((button) => {
+        const rect = button.getBoundingClientRect();
+        return {
+          name: button.textContent.trim(),
+          scrollWidth: button.scrollWidth,
+          clientWidth: button.clientWidth,
+          width: Math.round(rect.width),
+          inside: rect.left >= start - 0.5 && rect.right <= end + 0.5,
+          selected: button.getAttribute('aria-selected') === 'true',
+        };
+      }),
+    };
+  });
+  const first = await read();
+  for (const tab of first.tabs) {
+    check(tab.scrollWidth <= tab.clientWidth + 1, `${label}: "${tab.name}" does not clip its own label (${tab.scrollWidth} ≤ ${tab.clientWidth} + 1)`);
+  }
+  check(Boolean(first.fade) === first.scrollable, `${label}: the strip fades only when it genuinely overflows (fade "${first.fade}", ${first.scrollable ? 'overflows' : 'fits'})`);
+  check(first.tabs.every((tab) => tab.width >= 28), `${label}: every tab keeps a tap target of at least 28px`);
+  const selected = first.tabs.find((tab) => tab.selected);
+  check(Boolean(selected?.inside), `${label}: the selected "${selected?.name}" tab is fully inside the strip`);
+  const last = first.tabs.at(-1);
+  await page.getByRole('tab', { name: last.name }).click();
+  await page.waitForTimeout(160);
+  const reached = await read();
+  const final = reached.tabs.at(-1);
+  check(final.inside, `${label}: selecting "${final.name}" scrolls the whole label inside the strip`);
+  check(reached.tabs.filter((tab) => tab.selected).length === 1 && final.selected, `${label}: "${final.name}" is the one selected tab`);
+  check(!reached.scrollable || reached.scrollLeft > 0, `${label}: the strip scrolled to reach it (${reached.scrollLeft}px)`);
+  await page.getByRole('tab', { name: 'Overview' }).click();
+  await page.waitForTimeout(120);
+}
+
 async function crewPanel(page, panel) {
   for (const text of ['Rework the empty-state copy', 'Draft the changelog entry']) {
     check(await panel.getByText(text, { exact: true }).isVisible(), `the crew lists the worker "${text}"`);
@@ -77,7 +121,9 @@ async function run() {
     console.log('captain crew at 1440×900, dark');
     const dark = await session(browser, { theme: 'dark' });
     const panel = await openCaptain(dark.page, app.url);
-    await crewPanel(dark.page, panel);
+    await strip(dark.page, '1440 dark');
+    await dark.page.getByRole('tab', { name: 'Crew' }).click();
+    await crewPanel(dark.page, dark.page.getByRole('tabpanel', { name: 'Crew' }));
     await transcript(dark.page);
     await layout(dark.page, '1440 dark');
     check(await dark.page.getByRole('button', { name: 'Show workspace panel' }).count() === 0, 'the crew panel is docked, not hidden');
@@ -92,7 +138,10 @@ async function run() {
 
     console.log('light theme, 1440×900');
     const light = await session(browser, { theme: 'light' });
-    await crewPanel(light.page, await openCaptain(light.page, app.url));
+    const lightPanel = await openCaptain(light.page, app.url);
+    await strip(light.page, '1440 light');
+    await light.page.getByRole('tab', { name: 'Crew' }).click();
+    await crewPanel(light.page, light.page.getByRole('tabpanel', { name: 'Crew' }));
     await layout(light.page, '1440 light');
     await shot(light.page, '03-crew-1440-light');
     check(light.problems.length === 0, 'no console errors in the light theme: ' + (light.problems.join(' | ') || 'none'));
@@ -109,6 +158,8 @@ async function run() {
     await phone.page.getByRole('tab', { name: 'Crew' }).click();
     await phone.page.getByRole('tabpanel', { name: 'Crew' }).waitFor();
     await settle(phone.page);
+    await strip(phone.page, '390 dark');
+    await phone.page.getByRole('tab', { name: 'Crew' }).click();
     check(await phone.page.getByRole('tabpanel', { name: 'Crew' }).getByText('extendo/crew-changelog').isVisible(), 'the crew panel opens as a drawer on a phone');
     await layout(phone.page, '390 dark');
     await shot(phone.page, '05-crew-390-drawer-dark');
