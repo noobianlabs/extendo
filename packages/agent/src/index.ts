@@ -24,6 +24,12 @@ export interface SendOptions {
   provider: string;
   model: string;
   interactive?: boolean;
+  /**
+   * Answers an approval without a person. Delegated work runs unattended, so a worker's turn
+   * supplies a policy that approves only what its own worktree confines. Returning true allows the
+   * call; returning false falls through to the person, or denies it when the turn is not interactive.
+   */
+  approve?: (call: ToolCall, context: ToolCtx) => boolean;
 }
 
 export interface AgentOptions {
@@ -203,7 +209,7 @@ export class Agent implements AgentRuntime {
     return decision !== 'deny';
   }
 
-  private async runTool(call: ToolCall, context: ToolCtx, tools: Map<string, Tool>, interactive: boolean): Promise<ToolResult> {
+  private async runTool(call: ToolCall, context: ToolCtx, tools: Map<string, Tool>, interactive: boolean, approve?: SendOptions['approve']): Promise<ToolResult> {
     const { ctx, signal } = context;
     let result: ToolResult;
     try {
@@ -218,7 +224,7 @@ export class Agent implements AgentRuntime {
         const input = await tool.input.safeParseAsync(offered.input);
         signal.throwIfAborted();
         if (!input.success) result = failCall(call, 'Invalid tool input: ' + input.error.issues.map(({ path, message }) => `${path.join('.')}: ${message}`).join('; '));
-        else if ((tool.needsApproval ?? !tool.readOnly) && !await this.approval(offered, context, interactive)) result = failCall(call, 'Tool execution was not approved');
+        else if ((tool.needsApproval ?? !tool.readOnly) && !(approve?.(offered, context) ?? false) && !await this.approval(offered, context, interactive)) result = failCall(call, 'Tool execution was not approved');
         else {
           const approved = JSON.stringify(offered);
           const executed = await ctx.waterfall('tools/execute', { call: structuredClone(offered), context }, async (value) => {
@@ -265,7 +271,7 @@ export class Agent implements AgentRuntime {
           add({ type: 'user/message', data: { turnId, messageId: randomUUID(), content: steered } });
         }
         const tools = new Map(ctx.get<Registry<Tool>>('tools').list().map((tool) => [tool.name, tool]));
-        const system = await Promise.all(ctx.get<Registry<SystemSection>>('system').list().map((section) => section.text({ session, ...ref })));
+        const system = (await Promise.all(ctx.get<Registry<SystemSection>>('system').list().map((section) => section.text({ session, ...ref })))).filter((text) => text.trim());
         const pre = await ctx.waterfall('agent/pre-step', { ...ref, sessionId, input: currentInput });
         signal.throwIfAborted();
         if (pre.skip || (index === 0 && !pre.input?.trim())) break;
@@ -329,7 +335,7 @@ export class Agent implements AgentRuntime {
           for (const [id, call] of calls) unsettled.set(id, call);
           const context: ToolCtx = { ctx, ...ref, sessionId, provider: provider.id, model: options.model, interactive: Boolean(options.interactive), cwd: session.cwd, signal };
           for (const call of calls.values()) {
-            const toolResult = await this.runTool(call, context, tools, options.interactive ?? false);
+            const toolResult = await this.runTool(call, context, tools, options.interactive ?? false, options.approve);
             add({ type: 'tool/result', data: { ...ref, result: toolResult } });
             unsettled.delete(call.id);
           }

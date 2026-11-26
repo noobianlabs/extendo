@@ -183,6 +183,19 @@ export class GitService {
     return { sha, shortSha, subject, branch: status.branch };
   }
 
+  /**
+   * Commits everything in a checkout, staged or not. A worker's turn ends with whatever it wrote in
+   * its own worktree, so its branch carries the work without the worker having to stage it by hand.
+   * Returns nothing when the checkout is already clean.
+   */
+  async commitAll(cwd: string, message: string): Promise<CommitResult | undefined> {
+    const { root, status } = await this.requireRepoRoot(cwd);
+    if (!status.files.length) return undefined;
+    const added = await this.git(root, ['add', '-A']);
+    if (added.code !== 0) throw new GitError('failed', firstLine(added.stderr) || 'git could not stage the worktree');
+    return this.commit(root, message);
+  }
+
   async push(cwd: string): Promise<PushResult> {
     const { root, status } = await this.requireRepoRoot(cwd);
     if (!status.branch) throw new GitError('detached', 'This checkout is not on a branch, so there is nothing to push');

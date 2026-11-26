@@ -228,6 +228,7 @@ export interface SessionEventData {
   'subagent/steered': { subagentId: string; message: string };
   'subagent/approval': { subagentId: string; request: ApprovalRequest };
   'subagent/approval-answered': { subagentId: string; requestId: string; decision: ApprovalDecision };
+  'crew/wake': { workerId: string; workerSessionId: string; title: string; turnId: string; outcome: TurnOutcome; report: string };
 }
 
 export type SessionEventType = keyof SessionEventData;
@@ -284,6 +285,55 @@ export interface Preview {
   updatedAt?: string;
 }
 
+/** A thread's place in the crew model: on its own, directing a crew, or working for one. */
+export type ThreadRole = 'standalone' | 'captain' | 'worker';
+
+export type IssueState = 'open' | 'in-progress' | 'needs-you' | 'in-review' | 'done' | 'canceled';
+
+/** The durable record of a unit of work. A captain's crew progress lives on issues, not in chat. */
+export interface Issue {
+  id: string;
+  number: number;
+  projectId: string;
+  title: string;
+  body?: string;
+  state: IssueState;
+  /** The captain thread that filed the issue. */
+  captainId?: string;
+  /** The thread the work is assigned to. */
+  assigneeId?: string;
+  parentId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface IssueComment {
+  id: string;
+  issueId: string;
+  /** The thread that wrote the comment, or 'person' for a person's comment. */
+  author: string;
+  body: string;
+  createdAt: string;
+}
+
+/** One worker as its captain's crew list shows it: what it is doing, where, and what it last said. */
+export interface CrewMember {
+  threadId: string;
+  sessionId: string;
+  title: string;
+  role: ThreadRole;
+  status: AgentStatus;
+  state?: ThreadState;
+  branch?: string;
+  worktree?: string;
+  /** The worker's last report: the newest assistant message in its own log. */
+  report?: string;
+  reportAt?: string;
+  pullRequest?: PullRequest;
+  issueId?: string;
+  archived?: boolean;
+}
+
 export interface Thread {
   id: string;
   projectId: string;
@@ -298,11 +348,22 @@ export interface Thread {
   createdAt: string;
   branch?: string;
   repo?: string;
+  role?: ThreadRole;
+  /** The captain a worker reports to. */
+  captainId?: string;
+  archived?: boolean;
   state?: ThreadState;
   stateSince?: string;
   updatedAt?: string;
   pullRequest?: PullRequest;
   subagents?: Subagent[];
+  /** A captain's crew, with each worker's state and last report. */
+  crew?: CrewMember[];
+  /** The issues filed by this captain. */
+  issues?: Issue[];
+  /** A worker's last report, kept on the thread so the captain reads it without the transcript. */
+  report?: string;
+  reportAt?: string;
   preview?: Preview;
 }
 
@@ -320,7 +381,9 @@ export interface Settings {
 
 export type Message =
   | { role: 'user'; id: string; turnId: string; content: string }
-  | { role: 'assistant'; id: string; turnId: string; stepId: string; content: string; reasoning?: string; tools: { call: ToolCall; result?: ToolResult }[] };
+  | { role: 'assistant'; id: string; turnId: string; stepId: string; content: string; reasoning?: string; tools: { call: ToolCall; result?: ToolResult }[] }
+  /** A durable crew notice: a worker finished and its captain's log now carries the report. */
+  | { role: 'notice'; id: string; kind: 'crew-wake'; workerId: string; title: string; outcome: TurnOutcome; content: string; at: string };
 
 export interface SessionSnapshot {
   session: Session;

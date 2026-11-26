@@ -626,3 +626,181 @@
   .pickerItem { min-block-size: 36px; }
   .iconButton { inline-size: 36px; block-size: 36px; }
 }
+
+/* A captain's crew and issues. */
+.crew {
+  display: flex;
+  flex-direction: column;
+}
+
+.crewList,
+.crewIssues {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.crewMember {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-4) var(--space-3);
+}
+
+.crewMember + .crewMember { border-block-start: var(--hairline) solid var(--border-1); }
+
+.crewTop {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  min-block-size: 20px;
+}
+
+.crewTitle {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font: var(--type-body);
+  font-weight: 500;
+  letter-spacing: var(--track-body);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.crewState {
+  flex: none;
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-sm);
+  background: var(--secondary);
+  color: var(--muted-1);
+  font: var(--type-micro);
+  letter-spacing: var(--track-micro);
+  text-transform: uppercase;
+}
+
+.crewState[data-state="working"] { color: var(--text); }
+.crewState[data-state="waiting-approval"] { color: var(--accent); }
+.crewState[data-state="failed"] { color: var(--destructive); }
+.crewState[data-state="done"] { color: var(--success); }
+
+.crewBranch {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  margin: 0;
+  padding-inline-start: var(--space-5);
+  overflow: hidden;
+  color: var(--muted-2);
+  font: var(--type-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.crewBranch > svg { flex: none; }
+.crewBranch > bdi { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+.crewReport {
+  display: -webkit-box;
+  margin: 0;
+  padding-inline-start: var(--space-5);
+  overflow: hidden;
+  color: var(--muted-1);
+  font: var(--type-caption);
+  letter-spacing: var(--track-caption);
+  text-wrap: pretty;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.crewMeta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 16px;
+  padding-inline-start: var(--space-5);
+}
+
+.crewLink {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--muted-1);
+  font: var(--type-mono);
+  font-variant-numeric: tabular-nums;
+  text-decoration: none;
+}
+
+.crewLink[data-state="failing"] { color: var(--destructive); }
+.crewLink[data-state="ready"] { color: var(--success); }
+.crewLink[data-state="merged"] { color: var(--muted-2); }
+
+.crewSeen {
+  color: var(--muted-3);
+  font: var(--type-micro);
+  letter-spacing: var(--track-micro);
+}
+
+.crewIssue {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+}
+
+.crewIssue + .crewIssue { border-block-start: var(--hairline) solid var(--border-1); }
+
+.crewIssueNumber {
+  flex: none;
+  color: var(--muted-3);
+  font: var(--type-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.crewIssueBody { flex: 1; min-width: 0; }
+
+.crewIssueTitle {
+  display: block;
+  overflow: hidden;
+  color: var(--text);
+  font: var(--type-body);
+  letter-spacing: var(--track-body);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.crewIssueText {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: var(--muted-2);
+  font: var(--type-caption);
+  letter-spacing: var(--track-caption);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.crewIssueState {
+  flex: none;
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-sm);
+  background: var(--secondary);
+  color: var(--muted-1);
+  font: var(--type-micro);
+  letter-spacing: var(--track-micro);
+  text-transform: uppercase;
+}
+
+.crewIssueState[data-state="needs-you"] { color: var(--accent); }
+.crewIssueState[data-state="in-progress"] { color: var(--text); }
+.crewIssueState[data-state="in-review"] { color: var(--muted-1); }
+.crewIssueState[data-state="done"] { color: var(--success); }
+.crewIssueState[data-state="canceled"] { color: var(--muted-3); }
+
+.stateMark[data-state="working"] { color: var(--text); }
+.stateMark[data-state="queued"] { color: var(--muted-2); }
+
+@media (hover: hover) and (pointer: fine) {
+  .crewLink:hover { text-decoration: underline; text-decoration-color: var(--border-3); text-underline-offset: 2px; }
+}

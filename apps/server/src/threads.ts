@@ -1,5 +1,5 @@
 import type { AgentRuntime } from '@extendo/agent';
-import { deriveThreadState, projectSubagents, type PullRequest, type Subagent, type Thread } from '@extendo/contracts';
+import { deriveThreadState, projectSubagents, type CrewMember, type PullRequest, type Subagent, type Thread } from '@extendo/contracts';
 import type { PullRequestReader } from '@extendo/pullrequests';
 import type { SessionStore } from '@extendo/session';
 import type { ThreadRow, WorkspaceState } from './state.js';
@@ -40,7 +40,7 @@ export class ThreadViewer {
   }
 
   async list(projectId?: string): Promise<Thread[]> {
-    const rows = this.options.workspace.threads(projectId);
+    const rows = this.options.workspace.threads(projectId).filter((row) => !row.archived);
     return Promise.all(rows.map((row) => this.view(row)));
   }
 
@@ -62,6 +62,10 @@ export class ThreadViewer {
 
   private async view(row: ThreadRow): Promise<Thread> {
     const [pullRequest, derived] = await Promise.all([this.pullRequest(row), this.derive(row)]);
+    const captain = row.role === 'captain';
+    const [crew, issues] = captain
+      ? await Promise.all([this.crew(row), Promise.resolve(this.options.workspace.issues({ captainId: row.id }))])
+      : [undefined, undefined];
     return {
       ...row,
       status: this.options.agent.status(row.sessionId),
@@ -69,8 +73,35 @@ export class ThreadViewer {
       stateSince: derived.since,
       subagents: derived.subagents,
       pullRequest,
+      crew,
+      issues,
       preview: this.options.preview?.(row),
     };
+  }
+
+  /** A captain's workers, each with its own state, report, and open pull request. */
+  private async crew(captain: ThreadRow): Promise<CrewMember[]> {
+    const workers = this.options.workspace.workersOf(captain.id).filter((worker) => !worker.archived);
+    return Promise.all(workers.map(async (worker) => {
+      const view = await this.view(worker);
+      const issue = this.options.workspace.issues({ assigneeId: worker.id })
+        .find((candidate) => candidate.state !== 'done' && candidate.state !== 'canceled');
+      return {
+        threadId: view.id,
+        sessionId: view.sessionId,
+        title: view.title,
+        role: view.role ?? 'worker',
+        status: view.status,
+        state: view.state,
+        branch: view.branch,
+        worktree: view.worktree,
+        report: view.report,
+        reportAt: view.reportAt,
+        pullRequest: view.pullRequest,
+        issueId: issue?.id,
+        archived: view.archived,
+      };
+    }));
   }
 
   private async derive(row: ThreadRow): Promise<Derived> {

@@ -10,12 +10,13 @@ import { boardLabels } from '../console/board';
 import { humanizeTool } from '../chat/messages';
 import { PreviewPane } from '../console/preview';
 import { SubagentsPanel } from '../console/subagents';
+import { CrewPanel } from '../console/crew';
 import board from '../console/console.module.css';
 import styles from './inspector.module.css';
 
 const DiffView = lazy(() => import('../chat/diff'));
 
-const tabs = ['Overview', 'Subagents', 'Changes', 'Terminal', 'Preview'] as const;
+const tabs = ['Overview', 'Crew', 'Subagents', 'Changes', 'Terminal', 'Preview'] as const;
 export type InspectorTab = typeof tabs[number];
 type WorkState = 'done' | 'running' | 'failed' | 'queued';
 type ToolKind = 'read' | 'edit' | 'test' | 'shell' | 'other';
@@ -268,6 +269,8 @@ export function Inspector({
 }) {
   const [ownTab, setTab] = useState<InspectorTab>('Overview');
   const tab = controlled ?? ownTab;
+  const visibleTabs: readonly InspectorTab[] = thread?.role === 'captain' ? tabs : tabs.filter((name) => name !== 'Crew');
+  const active = visibleTabs.includes(tab) ? tab : 'Overview';
   const selectTab = (next: InspectorTab) => {
     setTab(next);
     onTabChange?.(next);
@@ -275,8 +278,8 @@ export function Inspector({
   const [opened, setOpened] = useState<{ threadId?: string; path: string }>();
   const baseId = useId();
   const data = useMemo(() => {
-    const currentTurn = messages.at(-1)?.turnId;
-    const recentMessages = messages.filter((message) => message.turnId === currentTurn);
+    const currentTurn = messages.findLast((message) => message.role === 'assistant')?.turnId;
+    const recentMessages = messages.filter((message) => message.role === 'assistant' && message.turnId === currentTurn);
     const activity: Activity[] = [];
     const recent: Activity[] = [];
     for (const message of messages) {
@@ -302,9 +305,9 @@ export function Inspector({
     setOpened((current) => current && current.threadId === thread?.id && current.path === path ? undefined : { threadId: thread?.id, path });
   };
   function navigateTabs(event: KeyboardEvent<HTMLButtonElement>, index: number) {
-    const next = event.key === 'ArrowRight' ? (index + 1) % tabs.length
-      : event.key === 'ArrowLeft' ? (index - 1 + tabs.length) % tabs.length
-      : event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : -1;
+    const next = event.key === 'ArrowRight' ? (index + 1) % visibleTabs.length
+      : event.key === 'ArrowLeft' ? (index - 1 + visibleTabs.length) % visibleTabs.length
+      : event.key === 'Home' ? 0 : event.key === 'End' ? visibleTabs.length - 1 : -1;
     if (next < 0) return;
     event.preventDefault();
     const button = event.currentTarget.parentElement?.querySelectorAll('button')[next];
@@ -319,15 +322,16 @@ export function Inspector({
       </button>
     </div>
     <div className={styles.tabs} role="tablist" aria-label="Inspector views">
-      {tabs.map((name, index) => <button
+      {visibleTabs.map((name, index) => <button
         key={name} type="button" role="tab" id={`${baseId}-${name}-tab`}
-        aria-selected={tab === name} aria-controls={`${baseId}-${name}`} tabIndex={tab === name ? 0 : -1}
+        aria-selected={active === name} aria-controls={`${baseId}-${name}`} tabIndex={active === name ? 0 : -1}
         onClick={() => selectTab(name)} onKeyDown={(event) => navigateTabs(event, index)}
       >{name}</button>)}
     </div>
-    {tabs.map((name) => <div key={name} id={`${baseId}-${name}`} role="tabpanel"
-      aria-labelledby={`${baseId}-${name}-tab`} className={styles.panel} hidden={tab !== name} tabIndex={0}>
-      {tab === name && (!thread && name !== 'Preview' ? <p className={styles.empty}>Open a thread to inspect its work.</p>
+    {visibleTabs.map((name) => <div key={name} id={`${baseId}-${name}`} role="tabpanel"
+      aria-labelledby={`${baseId}-${name}-tab`} className={styles.panel} hidden={active !== name} tabIndex={0}>
+      {active === name && (!thread && name !== 'Preview' ? <p className={styles.empty}>Open a thread to inspect its work.</p>
+        : name === 'Crew' ? <CrewPanel thread={thread} now={now} />
         : name === 'Subagents' ? <SubagentsPanel thread={thread} now={now} onSteer={onSteer} onStop={onStop} onApproval={onApproval} />
         : name === 'Preview' ? <PreviewPane thread={thread} now={now} />
         : !thread ? <p className={styles.empty}>Open a thread to inspect its work.</p>
@@ -373,7 +377,7 @@ export function Inspector({
             </ul> : <p className={styles.empty}>No tools run yet.</p>}
           </Section>
         </> : name === 'Changes' ? <SourceSurface
-          thread={thread} project={project} active={tab === 'Changes'} agentStatus={status}
+          thread={thread} project={project} active={active === 'Changes'} agentStatus={status}
           revision={revision} onThread={onThread} onDeleted={onDeleted} />
         : <Terminal activity={data.activity} />)}
     </div>)}

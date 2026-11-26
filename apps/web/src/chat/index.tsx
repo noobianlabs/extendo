@@ -61,7 +61,7 @@ export function ChatSurface({
   const timeline = draft && !committedDraft ? [...messages, draft] : messages;
   const attachedApprovals = new Set<string>();
   const hasConversation = timeline.length > 0 || approvals.length > 0 || running;
-  const latestTurn = timeline.at(-1)?.turnId;
+  const latestTurn = timeline.findLast((message) => message.role === 'assistant')?.turnId;
   const tasks = suggestions?.filter(text => text.trim()) ?? [];
 
   useLayoutEffect(() => {
@@ -107,6 +107,17 @@ export function ChatSurface({
                   if (message.role === 'user') {
                     return (
                       <article key={message.id} className={styles.userMessage} aria-label="Your message">
+                        <div dir="auto">{message.content}</div>
+                      </article>
+                    );
+                  }
+                  if (message.role === 'notice') {
+                    return (
+                      <article key={message.id} className={styles.notice} data-outcome={message.outcome} aria-label="Crew report">
+                        <div className={styles.noticeHead}>
+                          <strong>{message.title}</strong>
+                          <span>{message.outcome === 'completed' ? 'finished' : message.outcome}</span>
+                        </div>
                         <div dir="auto">{message.content}</div>
                       </article>
                     );

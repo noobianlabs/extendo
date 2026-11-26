@@ -194,5 +194,29 @@ export async function seedDemoRepo(root: string, remote: string): Promise<DemoCh
     worktrees[other] = path;
   }
 
+  // The demo crew's two workers each land a real change on their own branch, in their own worktree.
+  const crewCopy = 'extendo/crew-empty-state-copy';
+  await git(root, ['branch', crewCopy, 'main']);
+  await git(root, ['push', '-u', 'origin', crewCopy]);
+  const crewCopyPath = join(parent, 'crew-empty-state-copy');
+  await git(root, ['worktree', 'add', crewCopyPath, crewCopy]);
+  write(crewCopyPath, 'apps/web/src/search/EmptyState.tsx', editedEmptyState);
+  await git(crewCopyPath, ['add', '-A']);
+  await git(crewCopyPath, ['commit', '-m', 'Name the query in the empty state']);
+  worktrees[crewCopy] = crewCopyPath;
+
+  const crewChangelog = 'extendo/crew-changelog';
+  await git(root, ['branch', crewChangelog, 'main']);
+  await git(root, ['push', '-u', 'origin', crewChangelog]);
+  const crewChangelogPath = join(parent, 'crew-changelog');
+  await git(root, ['worktree', 'add', crewChangelogPath, crewChangelog]);
+  write(crewChangelogPath, 'docs/CHANGELOG.md', files['docs/CHANGELOG.md']!.replace(
+    '- Search keeps its filters when you switch tabs.',
+    '- Search keeps its filters when you switch tabs.\n- Empty results name the query that found nothing.',
+  ));
+  await git(crewChangelogPath, ['add', '-A']);
+  await git(crewChangelogPath, ['commit', '-m', 'Note the empty-state copy in the changelog']);
+  worktrees[crewChangelog] = crewChangelogPath;
+
   return { root, remote, worktrees };
 }

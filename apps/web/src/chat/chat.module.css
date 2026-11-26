@@ -205,6 +205,32 @@
   overflow: auto;
 }
 
+.notice {
+  position: relative;
+  max-inline-size: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: var(--hairline) solid var(--border-1);
+  border-radius: var(--radius);
+  background: var(--inset);
+  overflow-wrap: anywhere;
+}
+
+.userMessage + .notice,
+.notice + .notice { margin-block-start: var(--space-2); }
+
+.noticeHead {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin-block-end: var(--space-1);
+  color: var(--muted-1);
+  font: var(--type-caption);
+}
+
+.noticeHead strong { color: var(--text); font-weight: 600; }
+.notice[data-outcome="failed"] .noticeHead > span { color: var(--destructive); }
+.notice > div:last-child { font: var(--type-body); white-space: pre-wrap; }
+
 .assistant,
 .working,
 .orphanTool {

@@ -14,6 +14,7 @@ import { ExtensionWorkshop } from './extensions.js';
 import { previewFor } from './preview.js';
 import { statePlugin, type WorkspaceState } from './state.js';
 import { ThreadViewer } from './threads.js';
+import { crewPlugin, type CrewService } from './crew.js';
 
 export type RuntimeMode = 'web' | 'headless' | 'sdk';
 
@@ -28,6 +29,7 @@ export interface RuntimeOptions {
   seed?: boolean;
   pullRequests?: PullRequestReader;
   git?: GitService;
+  maxCrew?: number;
 }
 
 export interface Runtime {
@@ -40,6 +42,7 @@ export interface Runtime {
   pullRequests: PullRequestReader;
   git: GitService;
   viewer: ThreadViewer;
+  crew: CrewService;
   extensions: ExtensionWorkshop;
   providers(): ProviderInfo[];
   model(provider: string, model?: string): { provider: string; model: string };
@@ -49,7 +52,7 @@ export interface Runtime {
 export const defaultDataDir = (env: NodeJS.ProcessEnv = process.env) => resolve(env.EXTENDO_HOME ?? join(homedir(), '.extendo'));
 
 export function defaultProfile(mode: RuntimeMode): Profile {
-  const base = ['capabilities', 'sessions', 'workspace', 'providers', 'workspace-tools', 'demo-tools', 'pull-requests', 'instructions', 'agent', 'swarm'];
+  const base = ['capabilities', 'sessions', 'workspace', 'providers', 'workspace-tools', 'demo-tools', 'pull-requests', 'instructions', 'agent', 'crew', 'swarm'];
   return {
     name: `extendo-${mode}`,
     bundles: [
@@ -76,6 +79,7 @@ export async function createRuntime(options: RuntimeOptions = {}): Promise<Runti
     ['pull-requests', () => pullRequestPlugin({ reader: pullRequests })],
     ['swarm', swarmPlugin],
     ['agent', agentPlugin],
+    ['crew', () => crewPlugin({ git: options.git ?? new GitService(), maxCrew: options.maxCrew })],
     ['instructions', () => ({ name: 'instructions', apply(ctx) {
       ctx.get<Registry<{ name: string; text: (input: { session: { cwd: string } }) => string }>>('system').register(ctx, 'extendo', {
         name: 'extendo',
@@ -97,6 +101,8 @@ export async function createRuntime(options: RuntimeOptions = {}): Promise<Runti
     await extensions.mountInstalled();
 
     if (mode === 'web' && options.seed !== false) await seedDemo({ workspace, sessions, dataDir });
+    const crew = ctx.get<CrewService>('crew');
+    await crew.whenReady();
     if (options.cwd) workspace.openProject(options.cwd);
 
     const providers = () => {
@@ -111,7 +117,7 @@ export async function createRuntime(options: RuntimeOptions = {}): Promise<Runti
     const git = options.git ?? new GitService();
     const viewer = new ThreadViewer({ workspace, sessions, agent, pullRequests, preview: previewFor });
     return {
-      mode, ctx, sessions, workspace, agent, swarm, pullRequests, git, viewer, extensions, providers,
+      mode, ctx, sessions, workspace, agent, swarm, pullRequests, git, viewer, crew, extensions, providers,
       model(provider, model) {
         const info = providers().find(({ id }) => id === provider);
         if (!info) throw new Error('Unknown provider');
