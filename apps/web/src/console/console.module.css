@@ -1088,8 +1088,8 @@
   gap: var(--space-1);
 }
 
-.crewLanded code { color: var(--text); font: var(--type-mono); }
-.crewLanded bdi { color: var(--text); font: var(--type-mono); }
+.crewLanded code { color: var(--text); font: var(--type-mono); overflow-wrap: anywhere; }
+.crewLanded bdi { color: var(--text); font: var(--type-mono); overflow-wrap: anywhere; }
 .crewKept { color: var(--muted-3); }
 
 .crewProblem {
@@ -1106,7 +1106,8 @@
 }
 
 .crewProblem > svg { flex: none; margin-block-start: 2px; color: var(--destructive); }
-.crewProblem p { margin: 0; }
+.crewProblem > div { min-width: 0; }
+.crewProblem p { margin: 0; overflow-wrap: anywhere; }
 
 .crewConflicts {
   display: flex;
