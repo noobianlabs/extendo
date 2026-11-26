@@ -26,6 +26,14 @@ export function projectMessages(events: readonly SessionEvent[]): Message[] {
         if (tool) tool.result = result;
         break;
       }
+      case 'crew/wake': {
+        const { workerId, title, outcome, report } = event.data;
+        messages.push({
+          role: 'notice', id: `wake-${event.seq}`, kind: 'crew-wake',
+          workerId, title, outcome, content: report, at: event.ts,
+        });
+        break;
+      }
     }
   }
   return messages;
@@ -34,6 +42,9 @@ export function projectMessages(events: readonly SessionEvent[]): Message[] {
 export function projectModelMessages(events: readonly SessionEvent[]): ModelMessage[] {
   return projectMessages(events).flatMap((message): ModelMessage[] => {
     if (message.role === 'user') return [{ role: 'user', content: message.content }];
+    if (message.role === 'notice') {
+      return [{ role: 'user', content: `[crew notice] ${message.title} ${message.outcome === 'completed' ? 'finished' : message.outcome}: ${message.content}` }];
+    }
     return [
       { role: 'assistant', content: message.content, reasoning: message.reasoning, toolCalls: message.tools.map(({ call }) => call) },
       ...message.tools.flatMap(({ result }): ModelMessage[] => result ? [{ role: 'tool', result }] : []),

@@ -10,7 +10,7 @@ A `Plugin` has a name and an `apply(ctx)` function. Register services, listeners
 
 | Kind | Names |
 | --- | --- |
-| Durable | `session/created`, `turn/start`, `turn/end`, `step/start`, `step/end`, `user/message`, `assistant/message`, `assistant/attempt`, `tool/call`, `tool/result`, `context/compacted`, `subagent/spawned`, `subagent/queued`, `subagent/started`, `subagent/activity`, `subagent/report`, `subagent/steered`, `subagent/approval`, `subagent/approval-answered` |
+| Durable | `session/created`, `turn/start`, `turn/end`, `step/start`, `step/end`, `user/message`, `assistant/message`, `assistant/attempt`, `tool/call`, `tool/result`, `context/compacted`, `subagent/spawned`, `subagent/queued`, `subagent/started`, `subagent/activity`, `subagent/report`, `subagent/steered`, `subagent/approval`, `subagent/approval-answered`, `crew/wake` |
 | Live | `session/event`, `agent/status`, `agent/error`, `assistant/delta`, `assistant/tool-call`, `tool/approval`, `tool/approval-answered`, `pull-request/updated`, `thread/updated` |
 | Waterfall | `agent/pre-step`, `agent/request`, `llm/stream`, `tools/pre-execute`, `tools/execute`, `tools/post-execute` |
 | Capability seams | `fs/read`, `fs/write`, `tools/register`, `llm/register`, `telemetry/event` |
@@ -28,6 +28,14 @@ The message projection groups tool calls and results under their assistant step.
 Delegation is a child session running a real turn, not a second orchestration loop. `@extendo/swarm` registers the `delegate` tool with a run queue per parent session; a spawned run appends `subagent/spawned`, waits its turn with `subagent/queued` plus a position, and starts with `subagent/started`. The child's own tool calls and results become `subagent/activity` lines with measured durations, its last assistant message becomes the `subagent/report`, and a child approval is forwarded as `subagent/approval`. `subagent-steer` reaches a running or approval-blocked child through `AgentRuntime.steer`; `subagent-stop` cancels it or drops it from the queue.
 
 The parent's log is the only source of truth: `projectSubagents` folds those events back into the swarm the console renders, so a reload reconstructs exactly what was on screen. `deriveThreadState` then answers what the thread needs from a person, in this order: a waiting approval, an open turn or running run, a queued run, a pull request waiting on review, then the last turn's outcome.
+
+## Captains and crews
+
+A thread has a role: `standalone`, `captain`, or `worker`. A captain does not run the crew in its own turn; it starts worker threads and each worker runs an ordinary turn in its own git worktree and branch, with a write approved only when the path stays inside that worktree. `apps/server/src/crew.ts` owns the `crew.create`, `crew.list`, `crew.read`, `crew.message`, `crew.wait`, and `crew.archive` tools, the issue tools, and the role instructions each session's system prompt carries. The crew cap defaults to four concurrent workers, and it counts the workers that are not archived, so archiving is the way to make room.
+
+The durable spine is the captain's own log. When a worker's turn ends, `CrewService` writes the worker's last assistant message onto the worker's thread row as its report, commits whatever the worker left in its worktree, and appends a `crew/wake` event to the captain's log carrying the worker, the turn, the outcome and the report. That event projects into a `notice` message, so the captain's transcript shows what each worker reported. A wake starts the captain's next turn only when the captain is idle; a captain that is already working, typically because it was inside `crew.wait`, simply reads the report when its turn continues, and `crew.wait` resolves its tool call in the same turn.
+
+The wake is idempotent by `(workerId, turnId)`, and the service reconciles on boot: it reads every worker's last `turn/end`, appends the wake a captain's log is missing, and delivers the wakes its log holds past the captain's last turn end. A completion that happened before a restart still wakes the captain exactly once, and a captain does not wake again for a turn it already answered. Issues are the other durable record: a row in `workspace.sqlite` with a per-project number, a state (`open`, `in-progress`, `needs-you`, `in-review`, `done`, `canceled`), and optional captain, assignee and parent links, plus comments, so work that outlives a turn outlives the process too.
 
 ## Pull requests and previews
 

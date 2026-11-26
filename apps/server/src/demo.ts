@@ -16,6 +16,18 @@ export const demoPullRequests = (): Record<string, PullRequest> => ({
     checks: 'passing', checksSummary: '5 checks passed', review: 'approved',
     draft: false, merged: false, mergeable: true, state: 'open',
   },
+  'extendo/crew-empty-state-copy': {
+    number: 226, title: 'Name the query in the empty state', url: 'https://github.com/northstar/extendo/pull/226',
+    branch: 'extendo/crew-empty-state-copy', base: 'main', additions: 9, deletions: 2, changedFiles: 2,
+    checks: 'passing', checksSummary: '4 checks passed', review: 'approved',
+    draft: false, merged: false, mergeable: true, state: 'open',
+  },
+  'extendo/crew-changelog': {
+    number: 227, title: 'Note the empty-state copy in the changelog', url: 'https://github.com/northstar/extendo/pull/227',
+    branch: 'extendo/crew-changelog', base: 'main', additions: 1, deletions: 0, changedFiles: 1,
+    checks: 'passing', checksSummary: '4 checks passed', review: 'pending',
+    draft: false, merged: false, mergeable: true, state: 'open',
+  },
   'feat/swarm-audit': {
     number: 219, title: 'Audit empty-state copy across search surfaces', url: 'https://github.com/northstar/web/pull/219',
     branch: 'feat/swarm-audit', base: 'main', additions: 31, deletions: 12, changedFiles: 4,
@@ -65,6 +77,7 @@ export async function seedDemo({ workspace, sessions, dataDir }: DemoSeed): Prom
     answer: 'Lead with the empty-state change, then the filter persistence fix. Keep the regional rollout to one paragraph and link the tracking issue.',
   });
   seedFailedThread(workspace, sessions, project);
+  seedCrew(workspace, sessions, project, checkout);
 }
 
 /** Puts a thread in the worktree its branch really has, so its checkout and its label agree. */
@@ -168,4 +181,72 @@ function seedFailedThread(workspace: WorkspaceState, sessions: SessionStore, pro
     { type: 'step/end', data: { turnId: 'turn-failed', stepId: 'step-failed', outcome: 'failed' } },
     { type: 'turn/end', data: { turnId: 'turn-failed', outcome: 'failed', error: 'The suite failed on the third repeat.' } },
   ]);
+}
+
+function seedCrew(workspace: WorkspaceState, sessions: SessionStore, project: Project, checkout?: DemoCheckout): void {
+  const captain = workspace.createThread(sessions, project, {
+    title: 'Run the empty-state copy crew', provider: 'demo', model: 'demo', branch: 'main', role: 'captain',
+  });
+  const copy = workspace.createThread(sessions, project, {
+    title: 'Rework the empty-state copy', provider: 'demo', model: 'demo',
+    branch: 'extendo/crew-empty-state-copy', role: 'worker', captainId: captain.id,
+  });
+  const changelog = workspace.createThread(sessions, project, {
+    title: 'Draft the changelog entry', provider: 'demo', model: 'demo',
+    branch: 'extendo/crew-changelog', role: 'worker', captainId: captain.id,
+  });
+  useCheckout(workspace, sessions, copy, 'extendo/crew-empty-state-copy', checkout);
+  useCheckout(workspace, sessions, changelog, 'extendo/crew-changelog', checkout);
+
+  sessions.appendMany(captain.sessionId, [
+    { type: 'turn/start', data: { turnId: 'turn-crew-plan', provider: 'demo', model: 'demo' } },
+    { type: 'user/message', data: { turnId: 'turn-crew-plan', messageId: 'crew-plan-user', content: 'Take the empty-state copy and the changelog. Two workers, each in its own worktree.' } },
+    { type: 'step/start', data: { turnId: 'turn-crew-plan', stepId: 'crew-plan-step' } },
+    { type: 'assistant/message', data: { turnId: 'turn-crew-plan', stepId: 'crew-plan-step', messageId: 'crew-plan-assistant', content: 'Two workers, each in its own worktree: one takes the empty-state copy, one takes the changelog. I will report when both land.' } },
+    { type: 'tool/call', data: { turnId: 'turn-crew-plan', stepId: 'crew-plan-step', call: { id: 'crew-call-copy', name: 'crew.create', input: { title: 'Rework the empty-state copy', brief: 'Make the empty state name the query that found nothing.' } } } },
+    { type: 'tool/result', data: { turnId: 'turn-crew-plan', stepId: 'crew-plan-step', result: { callId: 'crew-call-copy', name: 'crew.create', output: { threadId: copy.id, branch: 'extendo/crew-empty-state-copy' }, isError: false } } },
+    { type: 'tool/call', data: { turnId: 'turn-crew-plan', stepId: 'crew-plan-step', call: { id: 'crew-call-changelog', name: 'crew.create', input: { title: 'Draft the changelog entry', brief: 'Note the empty-state copy in the changelog.' } } } },
+    { type: 'tool/result', data: { turnId: 'turn-crew-plan', stepId: 'crew-plan-step', result: { callId: 'crew-call-changelog', name: 'crew.create', output: { threadId: changelog.id, branch: 'extendo/crew-changelog' }, isError: false } } },
+    { type: 'step/end', data: { turnId: 'turn-crew-plan', stepId: 'crew-plan-step', outcome: 'completed' } },
+    { type: 'turn/end', data: { turnId: 'turn-crew-plan', outcome: 'completed' } },
+  ]);
+
+  sessions.appendMany(copy.sessionId, [
+    { type: 'turn/start', data: { turnId: 'turn-crew-copy', provider: 'demo', model: 'demo' } },
+    { type: 'user/message', data: { turnId: 'turn-crew-copy', messageId: 'crew-copy-user', content: 'Make the empty state name the query that found nothing.' } },
+    { type: 'step/start', data: { turnId: 'turn-crew-copy', stepId: 'crew-copy-step' } },
+    { type: 'assistant/message', data: { turnId: 'turn-crew-copy', stepId: 'crew-copy-step', messageId: 'crew-copy-assistant', content: 'The empty state now names the query and offers a clear action. The branch is ready for review.' } },
+    { type: 'tool/call', data: { turnId: 'turn-crew-copy', stepId: 'crew-copy-step', call: { id: 'crew-copy-edit', name: 'demo_edit', input: { path: 'apps/web/src/search/EmptyState.tsx' } } } },
+    { type: 'tool/result', data: { turnId: 'turn-crew-copy', stepId: 'crew-copy-step', result: { callId: 'crew-copy-edit', name: 'demo_edit', output: { path: 'apps/web/src/search/EmptyState.tsx', simulated: true }, isError: false } } },
+    { type: 'step/end', data: { turnId: 'turn-crew-copy', stepId: 'crew-copy-step', outcome: 'completed' } },
+    { type: 'turn/end', data: { turnId: 'turn-crew-copy', outcome: 'completed' } },
+  ]);
+
+  sessions.appendMany(changelog.sessionId, [
+    { type: 'turn/start', data: { turnId: 'turn-crew-changelog', provider: 'demo', model: 'demo' } },
+    { type: 'user/message', data: { turnId: 'turn-crew-changelog', messageId: 'crew-changelog-user', content: 'Note the empty-state copy in the changelog.' } },
+    { type: 'step/start', data: { turnId: 'turn-crew-changelog', stepId: 'crew-changelog-step' } },
+    { type: 'assistant/message', data: { turnId: 'turn-crew-changelog', stepId: 'crew-changelog-step', messageId: 'crew-changelog-assistant', content: 'The changelog now notes that empty results name the query. One line, no other changes.' } },
+    { type: 'tool/call', data: { turnId: 'turn-crew-changelog', stepId: 'crew-changelog-step', call: { id: 'crew-changelog-edit', name: 'demo_edit', input: { path: 'docs/CHANGELOG.md' } } } },
+    { type: 'tool/result', data: { turnId: 'turn-crew-changelog', stepId: 'crew-changelog-step', result: { callId: 'crew-changelog-edit', name: 'demo_edit', output: { path: 'docs/CHANGELOG.md', simulated: true }, isError: false } } },
+    { type: 'step/end', data: { turnId: 'turn-crew-changelog', stepId: 'crew-changelog-step', outcome: 'completed' } },
+    { type: 'turn/end', data: { turnId: 'turn-crew-changelog', outcome: 'completed' } },
+  ]);
+
+  sessions.appendMany(captain.sessionId, [
+    { type: 'crew/wake', data: { workerId: copy.id, workerSessionId: copy.sessionId, title: copy.title, turnId: 'turn-crew-copy', outcome: 'completed', report: 'The empty state now names the query and offers a clear action. The branch is ready for review.' } },
+    { type: 'crew/wake', data: { workerId: changelog.id, workerSessionId: changelog.sessionId, title: changelog.title, turnId: 'turn-crew-changelog', outcome: 'completed', report: 'The changelog now notes that empty results name the query. One line, no other changes.' } },
+    { type: 'turn/start', data: { turnId: 'turn-crew-review', provider: 'demo', model: 'demo' } },
+    { type: 'step/start', data: { turnId: 'turn-crew-review', stepId: 'crew-review-step' } },
+    { type: 'assistant/message', data: { turnId: 'turn-crew-review', stepId: 'crew-review-step', messageId: 'crew-review-assistant', content: 'Both workers landed. The empty state names the query and the changelog carries the note. I filed the design check as an issue; the copy is ready for review.' } },
+    { type: 'step/end', data: { turnId: 'turn-crew-review', stepId: 'crew-review-step', outcome: 'completed' } },
+    { type: 'turn/end', data: { turnId: 'turn-crew-review', outcome: 'completed' } },
+  ]);
+
+  workspace.createIssue(project, {
+    title: 'Confirm the empty-state copy with design',
+    body: 'The copy names the query. Design should confirm the wording before the branch merges.',
+    state: 'needs-you',
+    captainId: captain.id,
+  });
 }

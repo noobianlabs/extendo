@@ -32,7 +32,11 @@ Above the composer, the strip names the tools a plugin added and counts the buil
 
 ## Work panel
 
-Tabs: Overview (plan, changed files, recent activity), Subagents (Running, Waiting on you, Queued, Failed, Stopped, Done, each with role, timing, activity lines with durations, report or error, steer and stop controls), Changes, Terminal, and Preview. Preview iframes the branch's page rendered by `GET /api/preview/:sessionId`.
+Tabs: Overview (plan, changed files, recent activity), Crew (a captain's workers and issues), Subagents (Running, Waiting on you, Queued, Failed, Stopped, Done, each with role, timing, activity lines with durations, report or error, steer and stop controls), Changes, Terminal, and Preview. Preview iframes the branch's page rendered by `GET /api/preview/:sessionId`.
+
+The tab strip is 360px wide with the rest of the panel and reads as one row of six labels; when the panel is narrower than the labels need, the two least-used views, Terminal then Preview, move behind a **More** control that names the hidden view when it is open. A fade marks the edge of a strip that still cannot fit, and selecting a tab always scrolls it whole into view.
+
+**Crew** appears only on a captain thread. It lists each worker with its state, its branch, its last report quoted, its pull request, and when it reported, then the issues the captain filed with their number, title, body, and state, so "Needs you" is visible without opening a transcript. Worker completions also land in the captain's own conversation as report notes naming the worker and its outcome.
 
 **Changes** is the source surface from `GET /api/git/status`, scoped to the thread's checkout: the branch, its upstream, ahead/behind, whether the thread runs in its own worktree or the shared checkout (with the control that creates or removes it), the three change groups with a stage or unstage control per row and per group, an inline CodeMirror merge diff per file, and a sticky commit bar carrying the message field, Commit, Push, and the pull request control or the sentence explaining why it is unavailable. It re-reads the checkout when the tab opens, when a write or shell tool finishes in the thread, every 1.5s while a turn runs, and on demand from its refresh control; stage, commit, push, and worktree actions each return the fresh state with their result, so the panel never shows a status it did not just read. Mutations live under `/api/git/*` in their own Hono app (`apps/server/src/gitApi.ts`), plus `DELETE /api/threads/:id`, which owns worktree cleanup.
 

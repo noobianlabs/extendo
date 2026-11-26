@@ -87,7 +87,7 @@ Rules:
 
 ## Layout
 
-`240px sidebar | fluid main | right panel`. The right panel is 320px for work tabs and up to 560px for
+`240px sidebar | fluid main | right panel`. The right panel is 360px for work tabs and up to 560px for
 the workshop; it is one panel with two modes, not two panels. At ≤1100px it becomes an overlay sheet;
 at ≤760px the sidebar becomes a sheet behind a 44px header control. The transcript column is capped at
 720px and centred, with the spine pinned to its left edge.
